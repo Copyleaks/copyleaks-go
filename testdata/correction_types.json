@@ -1,0 +1,11 @@
+{
+  "correctionTypes": [
+    {
+      "title": "General",
+      "description": "A general correction detected.",
+      "message": "A general correction detected",
+      "id": 1,
+      "category": 2
+    }
+  ]
+}

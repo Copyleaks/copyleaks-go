@@ -1,0 +1,54 @@
+{
+  "modelVersion": "v1",
+  "moderations": {
+    "text": {
+      "chars": {
+        "labels": [
+          1,
+          1,
+          1,
+          0,
+          2,
+          2
+        ],
+        "starts": [
+          15,
+          73,
+          138,
+          287,
+          407,
+          446
+        ],
+        "lengths": [
+          4,
+          4,
+          4,
+          14,
+          12,
+          24
+        ]
+      }
+    }
+  },
+  "legend": [
+    {
+      "index": 0,
+      "id": "toxic-v1"
+    },
+    {
+      "index": 1,
+      "id": "profanity-v1"
+    },
+    {
+      "index": 2,
+      "id": "hate-speech-v1"
+    }
+  ],
+  "scannedDocument": {
+    "scanId": "scan-id",
+    "totalWords": 86,
+    "actualCredits": 1,
+    "expectedCredits": 1,
+    "creationTime": "2025-08-06T08:05:20.6787519Z"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "updates": [
+    {
+      "msgType": "NEW",
+      "date": "2023-12-07T09:00:00Z",
+      "htmlDescription": "Copyleaks introducing - <a href=\"https://api.copyleaks.com/documentation/v3/writing-feedback\">Writing Feedback API</a>.<br><br>Writing Feedback offers real-time, AI-driven writing corrections. It serves as a virtual assessment API, capable of providing constructive critiques and instantaneous enhancements to your textual content."
+    },
+    {
+      "msgType": "NEW",
+      "date": "2023-05-03T09:00:00Z",
+      "htmlDescription": "PDF version 2 is now publicly available for API users. The updated PDF report now includes AI detection results, cheat alerts, and an updated interface. In order to enable the newest version of our report, edit the <code>properties.pdf.version</code> flag of the <a href=\"https://api.copyleaks.com/documentation/v3/scans/submit/url\">Submit endpoint</a>."
+    }
+  ]
+}
