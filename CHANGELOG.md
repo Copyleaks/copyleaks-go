@@ -14,7 +14,6 @@ First release of the Copyleaks Go SDK. It covers:
 - Credit balance, usage history (CSV), release notes, supported file types and OCR languages.
 - Webhook payload types and parsers for the completed, error, creditsChecked, indexed, new-result and
   export-completed webhooks, and the AI Text Detection result of the `suspected-ai-text` alert.
-- The `x-tenant` header, per client (`WithTenant`) or per call (`WithCallTenant`).
 - Typed errors: `*APIError`, with `ErrUnauthorized`, `ErrRateLimited` and `ErrUnderMaintenance` for `errors.Is`.
 - Safety limits: base URLs must use https (http only for localhost), and response bodies are capped
   (`ErrResponseTooLarge`: 16 MiB of JSON, 64 MiB of CSV).

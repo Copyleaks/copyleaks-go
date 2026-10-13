@@ -204,9 +204,6 @@ func TestNilClientAndNilContextDoNotPanic(t *testing.T) {
 	if _, err := mustClient(t).ReleaseNotes(nilCtx); !errors.Is(err, ErrInvalidArgument) {
 		t.Errorf("nil context: err = %v, want ErrInvalidArgument", err)
 	}
-	if ctx := WithCallTenant(nilCtx, "t1"); ctx == nil {
-		t.Error("WithCallTenant(nil) returned nil")
-	}
 }
 
 func TestResponseBodyCaps(t *testing.T) {

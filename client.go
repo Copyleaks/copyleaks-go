@@ -44,7 +44,6 @@ type Client struct {
 	httpClient      *http.Client
 	apiBaseURL      string
 	identityBaseURL string
-	tenant          string
 	userAgent       string
 }
 
@@ -127,19 +126,6 @@ func checkBaseURL(option, baseURL string) (string, error) {
 	return strings.TrimRight(baseURL, "/"), nil
 }
 
-// WithTenant sends tenant as the x-tenant header on every request of the Client,
-// including Login and the public endpoints. WithCallTenant overrides it for one call.
-// When no tenant is set, the header is not sent.
-//
-// The header only routes requests to an environment that Copyleaks directs you to. It does
-// not grant access or separate data, so leave it unset unless Copyleaks tells you otherwise.
-func WithTenant(tenant string) Option {
-	return func(c *Client) error {
-		c.tenant = tenant
-		return nil
-	}
-}
-
 // WithUserAgent adds an application product token, such as "my-app/2.1", in front of the
 // SDK's own User-Agent token "copyleaks-go-sdk/<Version>", which is always sent.
 func WithUserAgent(userAgent string) Option {
@@ -149,28 +135,6 @@ func WithUserAgent(userAgent string) Option {
 		}
 		return nil
 	}
-}
-
-// callTenantKey is the context key of the per-call tenant set by WithCallTenant.
-type callTenantKey struct{}
-
-// WithCallTenant returns a copy of ctx that makes a call send tenant as the x-tenant
-// header, overriding the Client's WithTenant value for calls made with that context.
-// An empty tenant omits the header, even when the Client has a tenant.
-func WithCallTenant(ctx context.Context, tenant string) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, callTenantKey{}, tenant)
-}
-
-// tenantFor returns the x-tenant value of a call: the per-call tenant when ctx has one,
-// otherwise the Client's tenant. An empty result means the header is not sent.
-func (c *Client) tenantFor(ctx context.Context) string {
-	if tenant, ok := ctx.Value(callTenantKey{}).(string); ok {
-		return tenant
-	}
-	return c.tenant
 }
 
 // apiRequest describes one HTTP call. path holds already escaped segments. identity
@@ -222,9 +186,6 @@ func (c *Client) do(ctx context.Context, r apiRequest, out any) error {
 	}
 	if r.token != nil {
 		req.Header.Set("Authorization", "Bearer "+r.token.AccessToken)
-	}
-	if tenant := c.tenantFor(ctx); tenant != "" {
-		req.Header.Set("x-tenant", tenant)
 	}
 
 	resp, err := c.httpClient.Do(req)
