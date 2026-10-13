@@ -523,6 +523,47 @@ func TestAITextDetectionOptionalFields(t *testing.T) {
 	}
 }
 
+func TestSubmitAISourceMatchDisplayLanguageReportVersion(t *testing.T) {
+	webhooks := SubmitWebhooks{Status: "https://example.com/webhook/{STATUS}"}
+	const webhooksJSON = `"webhooks":{"status":"https://example.com/webhook/{STATUS}"}`
+	tests := []struct {
+		name  string
+		props ScanProperties
+		body  string
+	}{
+		{"unset", ScanProperties{Webhooks: webhooks},
+			`{` + webhooksJSON + `}`},
+		{"unset with pdf", ScanProperties{Webhooks: webhooks, PDF: &PDF{Create: true}},
+			`{` + webhooksJSON + `,"pdf":{"create":true}}`},
+		{"aiSourceMatch enabled", ScanProperties{Webhooks: webhooks, AISourceMatch: &AISourceMatch{Enable: true}},
+			`{` + webhooksJSON + `,"aiSourceMatch":{"enable":true}}`},
+		{"aiSourceMatch disabled", ScanProperties{Webhooks: webhooks, AISourceMatch: &AISourceMatch{}},
+			`{` + webhooksJSON + `,"aiSourceMatch":{"enable":false}}`},
+		{"displayLanguage", ScanProperties{Webhooks: webhooks, DisplayLanguage: "es"},
+			`{` + webhooksJSON + `,"displayLanguage":"es"}`},
+		{"reportVersion", ScanProperties{Webhooks: webhooks, PDF: &PDF{Create: true, ReportVersion: PDFReportVersionLatest}},
+			`{` + webhooksJSON + `,"pdf":{"create":true,"reportVersion":"latest"}}`},
+		{"reportVersion and version", ScanProperties{Webhooks: webhooks, PDF: &PDF{Create: true, Version: PDFVersion1, ReportVersion: PDFReportVersionV3}},
+			`{` + webhooksJSON + `,"pdf":{"create":true,"version":1,"reportVersion":"v3"}}`},
+		{"all three", ScanProperties{
+			Webhooks:        webhooks,
+			PDF:             &PDF{Create: true, ReportVersion: PDFReportVersionV2},
+			DisplayLanguage: "de",
+			AISourceMatch:   &AISourceMatch{Enable: true},
+		}, `{` + webhooksJSON + `,"pdf":{"create":true,"reportVersion":"v2"},"displayLanguage":"de","aiSourceMatch":{"enable":true}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t, http.StatusCreated, "")
+			req := &FileSubmission{Base64: "aGk=", Filename: "a.txt", Properties: tt.props}
+			if err := env.client(t).SubmitFile(context.Background(), testToken(), "scan-1", req); err != nil {
+				t.Fatal(err)
+			}
+			assertJSONEqual(t, env.next(t).body, `{"base64":"aGk=","filename":"a.txt","properties":`+tt.body+`}`)
+		})
+	}
+}
+
 func TestDeleteHeaders(t *testing.T) {
 	env := newTestEnv(t, http.StatusAccepted, "{}")
 	req := &DeleteRequest{

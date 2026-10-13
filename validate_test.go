@@ -241,6 +241,10 @@ func TestRequiredArguments(t *testing.T) {
 	badSensitivity.SensitivityLevel = 6
 	longIDPattern := validSubmitProps
 	longIDPattern.Scanning = &Scanning{Exclude: &ScanningExclude{IDPattern: strings.Repeat("a", 37)}}
+	badDisplayLanguage := validSubmitProps
+	badDisplayLanguage.DisplayLanguage = "EN"
+	badReportVersion := validSubmitProps
+	badReportVersion.PDF = &PDF{Create: true, ReportVersion: "V3"}
 	tests := map[string]func(c *Client) error{
 		"Login without email": func(c *Client) error {
 			_, err := c.Login(ctx, "", "key")
@@ -267,6 +271,13 @@ func TestRequiredArguments(t *testing.T) {
 		},
 		"SubmitURL with a 37-character idPattern": func(c *Client) error {
 			return c.SubmitURL(ctx, tok, "scan-1", &URLSubmission{URL: "https://example.com", Properties: longIDPattern})
+		},
+		"SubmitFile with display language EN": func(c *Client) error {
+			return c.SubmitFile(ctx, tok, "scan-1", &FileSubmission{Base64: "aGk=", Filename: "a.txt", Properties: badDisplayLanguage})
+		},
+		"SubmitOCR with report version V3": func(c *Client) error {
+			req := &OCRSubmission{Base64: "aGk=", Filename: "a.png", LangCode: "en", Properties: badReportVersion}
+			return c.SubmitOCR(ctx, tok, "scan-1", req)
 		},
 		"SubmitOCR without language": func(c *Client) error {
 			return c.SubmitOCR(ctx, tok, "scan-1", &OCRSubmission{Base64: "aGk=", Filename: "a.png", Properties: validSubmitProps})
@@ -545,6 +556,44 @@ func TestScanningExcludeIDPatternLength(t *testing.T) {
 	}
 }
 
+func TestDisplayLanguageValidation(t *testing.T) {
+	// The server checks ^(es|pt|fr|de|it|en)$, case-sensitive, on the whole value.
+	cases := map[string]bool{
+		"": true, "en": true, "es": true, "pt": true, "fr": true, "de": true, "it": true,
+		"EN": false, "En": false, "ja": false, "en-US": false, " en": false, "en\n": false,
+	}
+	for lang, valid := range cases {
+		props := validSubmitProps
+		props.DisplayLanguage = lang
+		err := props.validate()
+		if valid != (err == nil) {
+			t.Errorf("%q: err = %v, want valid = %v", lang, err, valid)
+		}
+		if !valid && !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("%q: err = %v, want ErrInvalidArgument", lang, err)
+		}
+	}
+}
+
+func TestPDFReportVersionValidation(t *testing.T) {
+	// The server allows exactly v1, v2, v3 and latest (AllowedValues, case-sensitive).
+	cases := map[string]bool{
+		"": true, "v1": true, "v2": true, "v3": true, "latest": true,
+		"V1": false, "Latest": false, "LATEST": false, "v0": false, "v4": false, "3": false, "v3 ": false,
+	}
+	for version, valid := range cases {
+		props := validSubmitProps
+		props.PDF = &PDF{Create: true, ReportVersion: version}
+		err := props.validate()
+		if valid != (err == nil) {
+			t.Errorf("%q: err = %v, want valid = %v", version, err, valid)
+		}
+		if !valid && !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("%q: err = %v, want ErrInvalidArgument", version, err)
+		}
+	}
+}
+
 func TestScanPropertiesJSONNames(t *testing.T) {
 	props := ScanProperties{
 		Webhooks: SubmitWebhooks{
@@ -588,11 +637,12 @@ func TestScanPropertiesJSONNames(t *testing.T) {
 			Code:                &ExcludeCode{Comments: true},
 		},
 		PDF: &PDF{
-			Create:    true,
-			Title:     "Report",
-			LargeLogo: "aGk=",
-			RTL:       true,
-			Version:   PDFVersion2,
+			Create:        true,
+			Title:         "Report",
+			LargeLogo:     "aGk=",
+			RTL:           true,
+			Version:       PDFVersion2,
+			ReportVersion: PDFReportVersionLatest,
 			Colors: &PDFColors{
 				MainStrip:      "#000001",
 				Titles:         "#000002",
@@ -605,6 +655,8 @@ func TestScanPropertiesJSONNames(t *testing.T) {
 		CheatDetection:      true,
 		ScanMethodAlgorithm: ScanMethodMaximumResults,
 		AIGeneratedText:     &AIGeneratedText{Detect: true},
+		AISourceMatch:       &AISourceMatch{Enable: true},
+		DisplayLanguage:     "fr",
 		CustomMetadata:      []CustomMetadata{{Key: "k", Value: "v"}},
 	}
 	want := `{
@@ -621,11 +673,13 @@ func TestScanPropertiesJSONNames(t *testing.T) {
 		"indexing": {"repositories": [{"id": "repo-1", "maskingPolicy": 0}]},
 		"exclude": {"quotes": true, "citations": true, "references": true, "tableOfContents": true, "titles": true,
 			"htmlTemplate": true, "documentTemplateIds": ["scan-0"], "code": {"comments": true}},
-		"pdf": {"create": true, "title": "Report", "largeLogo": "aGk=", "rtl": true, "version": 2,
+		"pdf": {"create": true, "title": "Report", "largeLogo": "aGk=", "rtl": true, "version": 2, "reportVersion": "latest",
 			"colors": {"mainStrip": "#000001", "titles": "#000002", "identical": "#000003", "minorChanges": "#000004",
 				"relatedMeaning": "#000005"}},
 		"sensitivityLevel": 4, "cheatDetection": true, "scanMethodAlgorithm": 1,
+		"displayLanguage": "fr",
 		"aiGeneratedText": {"detect": true},
+		"aiSourceMatch": {"enable": true},
 		"customMetadata": [{"key": "k", "value": "v"}]
 	}`
 	got, err := json.Marshal(props)

@@ -32,6 +32,10 @@ type ScanProperties struct {
 	Exclude *Exclude `json:"exclude,omitempty"`
 	// PDF requests and customizes a PDF report.
 	PDF *PDF `json:"pdf,omitempty"`
+	// DisplayLanguage is the language of the scan's PDF report: "en" (the server default),
+	// "es", "pt", "fr", "de" or "it". The codes are lowercase and case-sensitive. It is
+	// stored with the scan, so it also applies to a PDF report requested later.
+	DisplayLanguage string `json:"displayLanguage,omitempty"`
 	// SensitivityLevel trades speed for coverage, from 1 (fastest) to 5 (most thorough).
 	// The server default is 3.
 	SensitivityLevel int `json:"sensitivityLevel,omitempty"`
@@ -43,6 +47,9 @@ type ScanProperties struct {
 	// AIGeneratedText adds AI Text Detection to the scan. The result arrives as a
 	// suspected-ai-text alert in the completed webhook; see CompletedWebhook.AIDetectionResult.
 	AIGeneratedText *AIGeneratedText `json:"aiGeneratedText,omitempty"`
+	// AISourceMatch identifies the online sources that are suspected of containing
+	// AI-generated text. It only applies to documents detected as English.
+	AISourceMatch *AISourceMatch `json:"aiSourceMatch,omitempty"`
 	// CustomMetadata is attached to the document in a Private Cloud Hub and added to the
 	// results that match it.
 	CustomMetadata []CustomMetadata `json:"customMetadata,omitempty"`
@@ -193,8 +200,14 @@ type PDF struct {
 	LargeLogo string `json:"largeLogo,omitempty"`
 	// RTL aligns the text of the report from right to left.
 	RTL bool `json:"rtl,omitempty"`
-	// Version is the version of the report layout.
+	// Version is the version of the report layout. ReportVersion overrides it, and the API
+	// reference recommends ReportVersion instead.
 	Version PDFVersion `json:"version,omitempty"`
+	// ReportVersion is the version of the report layout: PDFReportVersionV1,
+	// PDFReportVersionV2, PDFReportVersionV3 or PDFReportVersionLatest. The values are
+	// lowercase and case-sensitive. It overrides Version when both are set. When neither
+	// is set, accounts created before 2025-05-15 get v1 and newer accounts get the latest.
+	ReportVersion string `json:"reportVersion,omitempty"`
 	// Colors customizes the colors of the report.
 	Colors *PDFColors `json:"colors,omitempty"`
 }
@@ -218,6 +231,13 @@ type PDFColors struct {
 type AIGeneratedText struct {
 	// Detect detects whether the text was written by AI.
 	Detect bool `json:"detect"`
+}
+
+// AISourceMatch identifies the online sources that are suspected of containing
+// AI-generated text. See ScanProperties.AISourceMatch.
+type AISourceMatch struct {
+	// Enable turns AI Source Match on. The server default is false.
+	Enable bool `json:"enable"`
 }
 
 // CustomMetadata is a key-value pair attached to a document in a Private Cloud Hub.
@@ -279,13 +299,27 @@ const (
 type PDFVersion int
 
 const (
-	// PDFVersion1 is the first report layout. It is the server default.
+	// PDFVersion1 is the first report layout. It is the server default for accounts
+	// created before 2025-05-15; see PDF.ReportVersion.
 	PDFVersion1 PDFVersion = 1
 	// PDFVersion2 is the second report layout, which includes AI Text Detection results
 	// and cheat detection alerts.
 	PDFVersion2 PDFVersion = 2
 	// PDFVersion3 is the third report layout.
 	PDFVersion3 PDFVersion = 3
+)
+
+// The values of PDF.ReportVersion.
+const (
+	// PDFReportVersionV1 is the first report layout.
+	PDFReportVersionV1 = "v1"
+	// PDFReportVersionV2 is the second report layout, which includes AI Text Detection
+	// results and cheat detection alerts.
+	PDFReportVersionV2 = "v2"
+	// PDFReportVersionV3 is the third report layout.
+	PDFReportVersionV3 = "v3"
+	// PDFReportVersionLatest is the latest report layout, currently v3.
+	PDFReportVersionLatest = "latest"
 )
 
 // Ptr returns a pointer to v. Use it to set the optional pointer fields of the request
@@ -307,6 +341,18 @@ func (p *ScanProperties) validate() error {
 	}
 	if p.Scanning != nil && p.Scanning.Exclude != nil && utf16Len(p.Scanning.Exclude.IDPattern) > 36 {
 		return invalid("Properties.Scanning.Exclude.IDPattern must be 1 to 36 characters")
+	}
+	switch p.DisplayLanguage {
+	case "", "en", "es", "pt", "fr", "de", "it":
+	default:
+		return invalid(`Properties.DisplayLanguage must be "en", "es", "pt", "fr", "de" or "it"`)
+	}
+	if p.PDF != nil {
+		switch p.PDF.ReportVersion {
+		case "", PDFReportVersionV1, PDFReportVersionV2, PDFReportVersionV3, PDFReportVersionLatest:
+		default:
+			return invalid(`Properties.PDF.ReportVersion must be "v1", "v2", "v3" or "latest"`)
+		}
 	}
 	return nil
 }
