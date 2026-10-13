@@ -2,14 +2,13 @@
 
 ## 1.0.0
 
-First release of the Copyleaks Go SDK, with the endpoints of the Copyleaks Python SDK:
+First release of the Copyleaks Go SDK. It covers:
 
 - Login, and a local token expiry check (`VerifyAuthToken`).
 - AI Text Detection (`DetectAIText`) and AI Image Detection (`DetectAIImage`).
 - Plagiarism Checker: submit a file, an image (OCR) or a URL, start, delete, export, and resend webhooks.
 - Scan properties `aiSourceMatch` (`AISourceMatch`), `displayLanguage` (`DisplayLanguage`) and
-  `pdf.reportVersion` (`PDF.ReportVersion`, with the `PDFReportVersion...` constants), as in the Python SDK
-  (BAC-5378). The display language and the report version are checked against the values the server accepts.
+  `pdf.reportVersion` (`PDF.ReportVersion`, with the `PDFReportVersion...` constants). The display language and the report version are checked against the values the server accepts.
 - Grammar Checker (`CheckGrammar`) and its correction types (`GrammarCorrectionTypes`).
 - Text Moderation (`ModerateText`).
 - Credit balance, usage history (CSV), release notes, supported file types and OCR languages.
