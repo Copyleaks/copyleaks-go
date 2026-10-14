@@ -866,3 +866,79 @@ func TestAIDetectionResultSingleDecode(t *testing.T) {
 func jsonUnmarshal(s string, v any) error {
 	return json.Unmarshal([]byte(s), v)
 }
+
+func TestNewEndpointErrors(t *testing.T) {
+	expired := &AuthToken{AccessToken: "x"}
+	calls := map[string]func(c *Client, tok *AuthToken) error{
+		"CheckImagePlagiarism": func(c *Client, tok *AuthToken) error {
+			_, err := c.CheckImagePlagiarism(context.Background(), tok, "scan-1", &ImagePlagiarismRequest{Image: []byte{1}, Filename: "a.png"})
+			return err
+		},
+		"DetectAIImageUpload": func(c *Client, tok *AuthToken) error {
+			_, err := c.DetectAIImageUpload(context.Background(), tok, "scan-1", &AIImageUploadRequest{Image: []byte{1}, Filename: "a.png", Model: AIImageModel1Ultra})
+			return err
+		},
+		"SubmitAIImageAsync": func(c *Client, tok *AuthToken) error {
+			return c.SubmitAIImageAsync(context.Background(), tok, "scan-1", &AIImageAsyncSubmission{URL: "u", FileName: "a.png", Model: "m", Webhooks: ResultWebhook{URL: "w"}})
+		},
+		"SubmitAIVideo": func(c *Client, tok *AuthToken) error {
+			return c.SubmitAIVideo(context.Background(), tok, "scan-1", &AIVideoSubmission{URL: "u", Filename: "a.mp4", Model: "m", Webhooks: ResultWebhook{URL: "w"}})
+		},
+		"AITextCreditsBalance": func(c *Client, tok *AuthToken) error {
+			_, err := c.AITextCreditsBalance(context.Background(), tok)
+			return err
+		},
+		"RepositoryInfo": func(c *Client, tok *AuthToken) error {
+			_, err := c.RepositoryInfo(context.Background(), tok, "repo_1")
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			env := newTestEnv(t, http.StatusInternalServerError, `{"error":"boom"}`)
+			c := env.client(t)
+			if err := call(c, expired); !errors.Is(err, ErrTokenExpired) {
+				t.Errorf("expired token: err = %v", err)
+			}
+			env.none(t)
+			var apiErr *APIError
+			if err := call(c, testToken()); !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusInternalServerError {
+				t.Errorf("HTTP 500: err = %v", err)
+			}
+		})
+	}
+	for name, call := range map[string]func(c *Client) error{
+		"AllowedCrossLanguages":    func(c *Client) error { _, err := c.AllowedCrossLanguages(context.Background()); return err },
+		"SupportedAITextFileTypes": func(c *Client) error { _, err := c.SupportedAITextFileTypes(context.Background()); return err },
+		"SupportedFileTypes":       func(c *Client) error { _, err := c.SupportedFileTypes(context.Background()); return err },
+	} {
+		env := newTestEnv(t, http.StatusServiceUnavailable, "")
+		if err := call(env.client(t)); !errors.Is(err, ErrUnderMaintenance) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}
+
+func TestImageContentType(t *testing.T) {
+	for filename, want := range map[string]string{
+		"a.png": "image/png", "a.JPG": "image/jpeg", "a.jpeg": "image/jpeg", "a.gif": "image/gif", "a.bmp": "image/bmp",
+		"a.webp": "image/webp", "a.ico": "image/x-icon", "a.heic": "image/heic", "a.heif": "image/heif", "a.avif": "image/avif",
+		"a.tif": "image/tiff", "a.tiff": "image/tiff", "a.raw": "application/octet-stream", "noext": "application/octet-stream",
+	} {
+		if got := imageContentType(filename); got != want {
+			t.Errorf("imageContentType(%q) = %q, want %q", filename, got, want)
+		}
+	}
+}
+
+func TestMultipartFilenameIsEscaped(t *testing.T) {
+	env := newTestEnv(t, http.StatusOK, "{}")
+	req := &ImagePlagiarismRequest{Image: []byte{1, 2}, Filename: "my \"best\"\r\nphoto.png"}
+	if _, err := env.client(t).CheckImagePlagiarism(context.Background(), testToken(), "scan-1", req); err != nil {
+		t.Fatal(err)
+	}
+	form := parseMultipart(t, env.next(t), "image")
+	if form.fileName != `my "best"photo.png` || form.fields["filename"] != req.Filename || !bytes.Equal(form.file, []byte{1, 2}) {
+		t.Errorf("form = %+v", form)
+	}
+}
