@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -26,10 +24,6 @@ const (
 // defaultTimeout bounds each request when no http.Client is set with WithHTTPClient and
 // no other timeout is set with WithTimeout.
 const defaultTimeout = 2 * time.Minute
-
-// defaultMaxIdleConnsPerHost is how many idle connections to each host the default
-// transport keeps, so that bursts of concurrent calls over HTTP/1.1 reuse connections.
-const defaultMaxIdleConnsPerHost = 32
 
 // maxErrorBody caps how much of an error response body is kept in an APIError.
 const maxErrorBody = 1 << 20
@@ -58,8 +52,6 @@ type Client struct {
 	retry           RetryPolicy
 	maxJSON         int64
 	timeout         time.Duration
-	// sleep waits for d or until ctx is done. Tests replace it.
-	sleep func(ctx context.Context, d time.Duration) error
 }
 
 // Option configures a Client. Pass options to NewClient.
@@ -74,7 +66,6 @@ func NewClient(opts ...Option) (*Client, error) {
 		identityBaseURL: DefaultIdentityBaseURL,
 		userAgent:       sdkUserAgent,
 		timeout:         defaultTimeout,
-		sleep:           sleepContext,
 	}
 	for _, opt := range opts {
 		if opt == nil {
@@ -85,32 +76,11 @@ func NewClient(opts ...Option) (*Client, error) {
 		}
 	}
 	if c.httpClient == nil {
-		c.httpClient = &http.Client{Timeout: c.timeout, Transport: defaultTransport()}
+		// The default client has no Transport of its own: each request goes through
+		// http.DefaultTransport, as it is when the request is sent.
+		c.httpClient = &http.Client{Timeout: c.timeout}
 	}
 	return c, nil
-}
-
-// defaultTransport returns the transport of the default http.Client: a copy of
-// http.DefaultTransport that keeps more idle connections per host. It is a copy, so
-// that changes to http.DefaultTransport after NewClient do not affect the Client, and
-// the SDK never changes http.DefaultTransport.
-func defaultTransport() http.RoundTripper {
-	var t *http.Transport
-	if dt, ok := http.DefaultTransport.(*http.Transport); ok {
-		t = dt.Clone()
-	} else {
-		t = &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		}
-	}
-	t.MaxIdleConnsPerHost = defaultMaxIdleConnsPerHost
-	return t
 }
 
 // WithHTTPClient makes the Client send its requests with hc instead of the default
@@ -216,17 +186,19 @@ func WithUserAgent(userAgent string) Option {
 // selects the identity server instead of the API server. token is nil for public
 // endpoints. body, when not nil, is sent as JSON; rawBody, when not nil, is sent as it
 // is with the contentType header. idempotent marks a call that is safe to send again
-// (see WithRetry); GET calls always are.
+// (see WithRetry); GET calls always are. noRetryOn503 keeps an idempotent call from
+// being retried after HTTP 503.
 type apiRequest struct {
-	method      string
-	path        string
-	query       url.Values
-	identity    bool
-	token       *AuthToken
-	body        any
-	rawBody     []byte
-	contentType string
-	idempotent  bool
+	method       string
+	path         string
+	query        url.Values
+	identity     bool
+	token        *AuthToken
+	body         any
+	rawBody      []byte
+	contentType  string
+	idempotent   bool
+	noRetryOn503 bool
 }
 
 // retryable reports whether r may be retried.
@@ -271,8 +243,8 @@ type attemptResult struct {
 	status int
 	// retryAfter is the delay that the Retry-After header of the response asked for.
 	retryAfter time.Duration
-	// transient reports a failure that a retry may fix: HTTP 429 or 503, or a network
-	// error.
+	// transient reports a failure that a retry may fix: HTTP 429 or 503, or a
+	// connection error (see transientNetError).
 	transient bool
 	// maybeProcessed reports a network error after the whole request was sent, so the
 	// server may have processed it.
@@ -321,7 +293,7 @@ func (c *Client) do(ctx context.Context, r apiRequest, out any) error {
 		if res.status == http.StatusConflict && maybeDone && out == nil {
 			return nil
 		}
-		if attempt >= attempts || !res.transient {
+		if attempt >= attempts || !res.transient || (r.noRetryOn503 && res.status == http.StatusServiceUnavailable) {
 			return res.err
 		}
 		maybeDone = maybeDone || res.maybeProcessed
@@ -332,7 +304,7 @@ func (c *Client) do(ctx context.Context, r apiRequest, out any) error {
 		if deadline, has := ctx.Deadline(); has && time.Until(deadline) < delay {
 			return fmt.Errorf("%w (not retried: %w)", res.err, context.DeadlineExceeded)
 		}
-		if err := c.sleep(ctx, delay); err != nil {
+		if err := sleep(ctx, delay); err != nil {
 			return fmt.Errorf("%w (not retried: %w)", res.err, err)
 		}
 	}
@@ -370,7 +342,7 @@ func (c *Client) attempt(ctx context.Context, r apiRequest, target string, body 
 	if err != nil {
 		return attemptResult{
 			err:            fmt.Errorf("copyleaks: %s %s: %w", r.method, r.path, err),
-			transient:      ctx.Err() == nil,
+			transient:      ctx.Err() == nil && transientNetError(err),
 			maybeProcessed: wrote.Load(),
 		}
 	}
@@ -391,11 +363,11 @@ func (c *Client) attempt(ctx context.Context, r apiRequest, target string, body 
 		}
 	}
 	// readFailed is the result of a failure to read a successful response body. A
-	// network error while reading it is transient.
+	// connection error while reading it is transient.
 	readFailed := func(err error) attemptResult {
 		return attemptResult{
 			err:            fmt.Errorf("copyleaks: read %s %s response: %w", r.method, r.path, err),
-			transient:      !errors.Is(err, ErrResponseTooLarge) && ctx.Err() == nil,
+			transient:      ctx.Err() == nil && transientNetError(err),
 			maybeProcessed: true,
 		}
 	}

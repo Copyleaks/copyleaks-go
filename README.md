@@ -90,8 +90,10 @@ if err != nil {
 	log.Fatal(err)
 }
 fmt.Println("AI detected:", res.IsAIDetected)
-for _, object := range res.DetectedObjects {
-	fmt.Println("found", object.Object)
+if res.DetectedObjects != nil {
+	for _, object := range *res.DetectedObjects {
+		fmt.Println("found", object.Object)
+	}
 }
 ```
 
@@ -99,7 +101,8 @@ for _, object := range res.DetectedObjects {
 sends the same check as base64 in JSON (`AIImageDetectionRequest.Base64`).
 
 To check an image at a URL in the background, submit it with `SubmitAIImageAsync`. Copyleaks posts the result,
-which has the shape of the `DetectAIImage` response, to your webhook. Decode it with `ParseAIImageWebhook`:
+which has the shape of the `DetectAIImage` response, to your webhook. Decode it with `ParseAIImageWebhook`. When
+the check fails, the webhook carries `Error` instead of a result, so check `res.Error` first.
 
 ```go
 err := client.SubmitAIImageAsync(ctx, token, "my-async-image-scan", &copyleaks.AIImageAsyncSubmission{
@@ -130,7 +133,12 @@ if err != nil {
 
 // In the webhook handler:
 res, err := copyleaks.ParseAIVideoWebhook(body)
-if err == nil && res.Summary != nil {
+switch {
+case err != nil:
+	log.Print(err)
+case res.Error != nil: // the check failed, for example because the video was too short
+	fmt.Println("AI video check failed:", res.Error.Message)
+case res.Summary != nil:
 	fmt.Printf("AI detected: %v, overall AI ratio: %.2f\n", res.IsAIDetected, res.Summary.OverallAIRatio)
 }
 ```
@@ -331,11 +339,13 @@ if err != nil {
 }
 ```
 
-* `WithRetry` turns on retries, which are off by default. A call is retried after HTTP 429, HTTP 503 and network
-  errors, waiting for the server's `Retry-After` delay when it sends one, and otherwise for an exponential backoff
-  with jitter (`BaseDelay`, 1 second by default, doubling up to `MaxDelay`, 30 seconds by default). Only calls
-  that are safe to repeat are retried: the GET calls, `Login`, the submits that carry your scan ID (`SubmitFile`,
-  `SubmitOCR`, `SubmitURL`, `SubmitAIImageAsync`, `SubmitAIVideo`) and `Export`. The checks that charge for each
+* `WithRetry` turns on retries, which are off by default. A call is retried after HTTP 429, HTTP 503 and connection
+  errors (a timeout, or a refused, reset or dropped connection; not an invalid TLS certificate or an unknown host),
+  waiting for the server's `Retry-After` delay when it sends one, and otherwise for an exponential backoff with
+  jitter (`BaseDelay`, 1 second by default, doubling up to `MaxDelay`, 30 seconds by default). Only calls that are
+  safe to repeat are retried: the GET calls, `Login`, the submits that carry your scan ID (`SubmitFile`,
+  `SubmitOCR`, `SubmitURL`, `SubmitAIImageAsync`, `SubmitAIVideo`) and `Export`, which is not retried after HTTP
+  503, as the failed export keeps its export ID. The checks that charge for each
   request (`DetectAIText`, `DetectAIImage`, `DetectAIImageUpload`, `CheckImagePlagiarism`, `CheckGrammar`,
   `ModerateText`), `Start`, `Delete` and `ResendWebhook` are never retried. The context of each call bounds the
   whole call, retries included.
@@ -343,8 +353,8 @@ if err != nil {
   connecting to reading the whole response. Raise it to upload large files over slow links, or set 0 to rely on the
   context only.
 * `WithHTTPClient` sends the requests with your own `*http.Client`, for example to use a proxy. The SDK uses it as
-  it is and never changes it; `WithTimeout` does not apply to it. The default client keeps up to 32 idle
-  connections per host, on its own copy of `http.DefaultTransport`.
+  it is and never changes it; `WithTimeout` does not apply to it. The default client sends the requests through
+  `http.DefaultTransport`.
 * `WithMaxJSONResponseSize` raises the 16 MiB limit of JSON responses, for example for the AI Image Detection masks
   of large, detailed images.
 * `WithUserAgent` adds your application's token in front of the SDK's `User-Agent`.

@@ -54,9 +54,10 @@ type AIImageDetectionRequest struct {
 	// AIImageMaskHeatmap or AIImageMaskNone.
 	MaskType string `json:"maskType,omitempty"`
 	// ObjectDetection lists up to 3 objects, such as "face" or "hand", to locate in the
-	// image. Each one found is returned, with its mask, in
-	// AIImageDetectionResponse.DetectedObjects. It does not change the cost.
-	ObjectDetection []AIImageObject `json:"objectDetection,omitempty"`
+	// image: &[]copyleaks.AIImageObject{{Object: "face"}}. Each one found is returned,
+	// with its mask, in AIImageDetectionResponse.DetectedObjects. It does not change the
+	// cost. It is a pointer, so that AIImageDetectionRequest stays comparable.
+	ObjectDetection *[]AIImageObject `json:"objectDetection,omitempty"`
 }
 
 // AIImageDetectionResponse is the result of AI Image Detection.
@@ -79,11 +80,17 @@ type AIImageDetectionResponse struct {
 	ScannedDocument *ScannedDocument `json:"scannedDocument"`
 	// DetectedObjects are the objects of the request's ObjectDetection list that were
 	// found in the image, each with its mask. Objects that were not found are left out,
-	// so look them up by Object.
-	DetectedObjects []AIImageDetectedObject `json:"detectedObjects"`
+	// so look them up by Object. It is nil when the request had no ObjectDetection list.
+	// It is a pointer, so that AIImageDetectionResponse stays comparable.
+	DetectedObjects *[]AIImageDetectedObject `json:"detectedObjects"`
 	// DeveloperPayload is the DeveloperPayload of an AIImageAsyncSubmission, when the
 	// webhook carries it.
-	DeveloperPayload string `json:"developerPayload"`
+	DeveloperPayload string `json:"developerPayload,omitempty"`
+	// Error tells why a check submitted with SubmitAIImageAsync failed. Check it first:
+	// when it is set, the webhook carries no result, only Error and DeveloperPayload.
+	// DetectAIImage and DetectAIImageUpload return an *APIError instead, and never set
+	// it.
+	Error *AsyncError `json:"error,omitempty"`
 }
 
 // AIImageDetectionResult is a run-length encoded mask, as parallel start and length lists.
@@ -154,7 +161,7 @@ func (c *Client) DetectAIImage(ctx context.Context, token *AuthToken, scanID str
 	if req == nil || req.Base64 == "" || req.Model == "" {
 		return nil, invalid("Base64 and Model are required")
 	}
-	if err := validateAIImageOptions(req.Filename, req.MaskType, req.ObjectDetection); err != nil {
+	if err := validateAIImageOptions(req.Filename, req.MaskType, valueOf(req.ObjectDetection)); err != nil {
 		return nil, err
 	}
 	if err := VerifyAuthToken(token); err != nil {
@@ -290,6 +297,25 @@ type ResultWebhook struct {
 	Headers [][]string `json:"headers,omitempty"`
 }
 
+// AsyncError tells why an asynchronous check, such as SubmitAIImageAsync or
+// SubmitAIVideo, failed. Copyleaks sends it to the result webhook instead of the
+// result.
+type AsyncError struct {
+	// Type is the error type, such as "invalid_request_error".
+	Type string `json:"type"`
+	// ID is the machine-readable error ID.
+	ID string `json:"id"`
+	// Code is the numeric error code.
+	Code int `json:"code"`
+	// Message is a human-readable description of the error.
+	Message string `json:"message"`
+	// URL links to the documentation of the error, when the server sends it.
+	URL string `json:"url,omitempty"`
+	// Details describe the request parameters that caused the error, when the server
+	// sends them.
+	Details []WebhookErrorDetail `json:"details,omitempty"`
+}
+
 // AIImageAsyncSubmission is the body of SubmitAIImageAsync.
 type AIImageAsyncSubmission struct {
 	// URL is the public address of the image to check (required).
@@ -350,7 +376,8 @@ func (c *Client) SubmitAIImageAsync(ctx context.Context, token *AuthToken, scanI
 }
 
 // ParseAIImageWebhook decodes the result of SubmitAIImageAsync that Copyleaks posts to
-// the webhook. It has the shape of the DetectAIImage response.
+// the webhook. It has the shape of the DetectAIImage response. When the check failed,
+// the result only has Error and DeveloperPayload, so check Error first.
 //
 // See https://docs.copyleaks.com/reference/data-types/ai-detector/ai-image-detection-response.
 func ParseAIImageWebhook(body []byte) (*AIImageDetectionResponse, error) {

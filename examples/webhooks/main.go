@@ -145,7 +145,9 @@ func aiImageResult(w http.ResponseWriter, body []byte) {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
 	}
-	if res.Summary != nil {
+	if res.Error != nil {
+		log.Printf("AI image check failed: %s (%s)", res.Error.Message, res.Error.ID)
+	} else if res.Summary != nil {
 		log.Printf("AI image: %.0f%% AI, detected: %v", res.Summary.AI*100, res.IsAIDetected)
 	}
 	w.WriteHeader(http.StatusOK)
@@ -159,7 +161,9 @@ func aiVideoResult(w http.ResponseWriter, body []byte) {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
 	}
-	if res.Summary != nil {
+	if res.Error != nil {
+		log.Printf("AI video check failed: %s (%s)", res.Error.Message, res.Error.ID)
+	} else if res.Summary != nil {
 		log.Printf("AI video: %.0f%% AI, detected: %v", res.Summary.OverallAIRatio*100, res.IsAIDetected)
 	}
 	w.WriteHeader(http.StatusOK)

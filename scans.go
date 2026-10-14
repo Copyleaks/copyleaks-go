@@ -240,6 +240,9 @@ func (c *Client) Export(ctx context.Context, token *AuthToken, scanID, exportID 
 		token:      token,
 		body:       req,
 		idempotent: true,
+		// After a 503, the export ID belongs to a failed export: a retry would only
+		// get 409 Conflict.
+		noRetryOn503: true,
 	}, nil)
 }
 

@@ -163,11 +163,13 @@ type ScanningExclude struct {
 	// non-whitespace character.
 	IDPattern string `json:"idPattern,omitempty"`
 	// BacklinksDomains excludes the results that link back to these domains: up to 10
-	// domains, each 1 to 256 characters.
-	BacklinksDomains []string `json:"backlinksDomains,omitempty"`
+	// domains, each 1 to 256 characters, such as &[]string{"example.com"}. It is a
+	// pointer, so that ScanningExclude stays comparable.
+	BacklinksDomains *[]string `json:"backlinksDomains,omitempty"`
 	// Text excludes the results that contain these phrases: up to 5 phrases, each 1 to 30
-	// characters.
-	Text []string `json:"text,omitempty"`
+	// characters, such as &[]string{"lorem ipsum"}. It is a pointer, so that
+	// ScanningExclude stays comparable.
+	Text *[]string `json:"text,omitempty"`
 }
 
 // ScanningInclude keeps only some submissions in the results.
@@ -468,6 +470,15 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
+// valueOf returns *p, or the zero value of T when p is nil.
+func valueOf[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}
+
 // maxAnalyticsIDLength is the longest ID of a Course, an Assignment or an Institution.
 const maxAnalyticsIDLength = 64
 
@@ -480,10 +491,10 @@ func (s *Scanning) validate() error {
 		if utf16Len(e.IDPattern) > 36 {
 			return invalid("Properties.Scanning.Exclude.IDPattern must be 1 to 36 characters")
 		}
-		if err := checkStrings("Properties.Scanning.Exclude.BacklinksDomains", e.BacklinksDomains, 10, 256); err != nil {
+		if err := checkStrings("Properties.Scanning.Exclude.BacklinksDomains", valueOf(e.BacklinksDomains), 10, 256); err != nil {
 			return err
 		}
-		if err := checkStrings("Properties.Scanning.Exclude.Text", e.Text, 5, 30); err != nil {
+		if err := checkStrings("Properties.Scanning.Exclude.Text", valueOf(e.Text), 5, 30); err != nil {
 			return err
 		}
 	}

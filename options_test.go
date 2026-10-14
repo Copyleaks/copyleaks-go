@@ -10,26 +10,26 @@ import (
 )
 
 func TestDefaultTransport(t *testing.T) {
-	before := http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost
 	c := mustClient(t)
-	tr, ok := c.httpClient.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("default transport is %T, want *http.Transport", c.httpClient.Transport)
-	}
-	if tr == http.DefaultTransport {
-		t.Error("the default client shares http.DefaultTransport")
-	}
-	if tr.MaxIdleConnsPerHost != 32 || !tr.ForceAttemptHTTP2 || tr.Proxy == nil || tr.TLSHandshakeTimeout == 0 {
-		t.Errorf("transport: MaxIdleConnsPerHost %d, ForceAttemptHTTP2 %v", tr.MaxIdleConnsPerHost, tr.ForceAttemptHTTP2)
-	}
-	if after := http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost; after != before {
-		t.Errorf("NewClient changed http.DefaultTransport.MaxIdleConnsPerHost from %d to %d", before, after)
+	if c.httpClient.Transport != nil {
+		t.Errorf("default transport is %T, want nil (http.DefaultTransport)", c.httpClient.Transport)
 	}
 	if c.httpClient.Timeout != 2*time.Minute {
 		t.Errorf("default timeout = %v, want 2m", c.httpClient.Timeout)
 	}
-	if c2 := mustClient(t); c2.httpClient.Transport == c.httpClient.Transport {
-		t.Error("two clients share one transport")
+	// The default client uses http.DefaultTransport as it is when the request is sent,
+	// so that tools that replace it, such as HTTP mocks and tracing, see the requests.
+	env := newTestEnv(t, http.StatusOK, `["en"]`)
+	c = env.client(t)
+	old := http.DefaultTransport
+	transport := &countingTransport{base: old}
+	http.DefaultTransport = transport
+	t.Cleanup(func() { http.DefaultTransport = old })
+	if _, err := c.OCRSupportedLanguages(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if transport.count != 1 {
+		t.Errorf("%d requests through http.DefaultTransport, want 1", transport.count)
 	}
 }
 

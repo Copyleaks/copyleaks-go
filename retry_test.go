@@ -2,12 +2,15 @@ package copyleaks
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -72,9 +75,18 @@ func (s *scriptedServer) requests() []captured {
 // for, without waiting.
 func (s *scriptedServer) retryClient(t *testing.T, policy RetryPolicy) (*Client, *[]time.Duration) {
 	t.Helper()
-	c := mustClient(t, WithAPIBaseURL(s.srv.URL), WithIdentityBaseURL(s.srv.URL), WithRetry(policy))
+	return retryClientFor(t, s.srv.URL, policy)
+}
+
+// retryClientFor returns a Client for the server at baseURL with policy, and the delays
+// that the Client waited for, without waiting. It replaces sleep until the test ends.
+func retryClientFor(t *testing.T, baseURL string, policy RetryPolicy) (*Client, *[]time.Duration) {
+	t.Helper()
+	c := mustClient(t, WithAPIBaseURL(baseURL), WithIdentityBaseURL(baseURL), WithRetry(policy))
 	var slept []time.Duration
-	c.sleep = func(ctx context.Context, d time.Duration) error {
+	old := sleep
+	t.Cleanup(func() { sleep = old })
+	sleep = func(ctx context.Context, d time.Duration) error {
 		slept = append(slept, d)
 		return ctx.Err()
 	}
@@ -266,6 +278,9 @@ func TestRetrySafeCalls(t *testing.T) {
 		step step
 	}{{"429", rateLimited}, {"503", maintenance}, {"network error", hangUp}} {
 		for _, tc := range safeCalls() {
+			if tc.name == "Export" && first.step.status == http.StatusServiceUnavailable {
+				continue // see TestRetryExportNotAfter503
+			}
 			t.Run(first.name+"/"+tc.name, func(t *testing.T) {
 				s := newScriptedServer(t, first.step, ok200)
 				c, slept := s.retryClient(t, RetryPolicy{MaxAttempts: 2, BaseDelay: time.Millisecond})
@@ -299,6 +314,40 @@ func TestRetryNeverRetriesUnsafeCalls(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestRetryExportNotAfter503(t *testing.T) {
+	// After a 503 the export ID belongs to a failed export, so a retry would get a 409
+	// that hides the 503.
+	s := newScriptedServer(t, maintenance, step{status: http.StatusConflict, body: `{"title":"Conflict"}`})
+	c, slept := s.retryClient(t, RetryPolicy{MaxAttempts: 3, BaseDelay: time.Millisecond})
+	err := c.Export(context.Background(), testToken(), "scan-1", "export-1", &ExportRequest{CompletionWebhook: "https://example.com/done"})
+	if !errors.Is(err, ErrUnderMaintenance) {
+		t.Fatalf("err = %v, want the 503", err)
+	}
+	if n := len(s.requests()); n != 1 || len(*slept) != 0 {
+		t.Errorf("%d requests and %d waits, want 1 and 0", n, len(*slept))
+	}
+}
+
+func TestRetryNotForCertificateErrors(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+	}))
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	// The default client does not trust the test server's certificate.
+	c, slept := retryClientFor(t, srv.URL, RetryPolicy{MaxAttempts: 3, BaseDelay: time.Millisecond})
+	_, err := c.CreditsBalance(context.Background(), testToken())
+	var certErr *tls.CertificateVerificationError
+	if !errors.As(err, &certErr) {
+		t.Fatalf("err = %v, want a certificate error", err)
+	}
+	if requests.Load() != 0 || len(*slept) != 0 {
+		t.Errorf("%d requests and %d waits, want 0 and 0", requests.Load(), len(*slept))
 	}
 }
 
@@ -352,7 +401,7 @@ func TestRetryStopsWhenTheContextEnds(t *testing.T) {
 	s := newScriptedServer(t, rateLimited, ok200)
 	c, _ := s.retryClient(t, RetryPolicy{MaxAttempts: 3})
 	ctx, cancel := context.WithCancel(context.Background())
-	c.sleep = func(context.Context, time.Duration) error {
+	sleep = func(context.Context, time.Duration) error {
 		cancel()
 		return context.Canceled
 	}

@@ -99,7 +99,10 @@ type AIVideoDetectionResponse struct {
 	// ScannedVideo is general information about the check.
 	ScannedVideo *ScannedVideo `json:"scannedVideo"`
 	// DeveloperPayload is the DeveloperPayload of the submit, when the webhook carries it.
-	DeveloperPayload string `json:"developerPayload"`
+	DeveloperPayload string `json:"developerPayload,omitempty"`
+	// Error tells why the check failed. Check it first: when it is set, the webhook
+	// carries no result, only Error and DeveloperPayload.
+	Error *AsyncError `json:"error,omitempty"`
 }
 
 // AIVideoTrackResult are the AI-generated segments of a track of a video, as parallel
@@ -168,7 +171,8 @@ type ScannedVideo struct {
 }
 
 // ParseAIVideoWebhook decodes the result of SubmitAIVideo that Copyleaks posts to the
-// webhook.
+// webhook. When the check failed, the result only has Error and DeveloperPayload, so
+// check Error first.
 func ParseAIVideoWebhook(body []byte) (*AIVideoDetectionResponse, error) {
 	return parseWebhook[AIVideoDetectionResponse]("AI video", body)
 }

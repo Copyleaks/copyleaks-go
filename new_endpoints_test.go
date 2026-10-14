@@ -191,7 +191,7 @@ func newEndpointCases(t *testing.T) []endpointCase {
 			call: func(ctx context.Context, c *Client) (any, error) {
 				return c.DetectAIImage(ctx, tok, "scan-1", &AIImageDetectionRequest{
 					Base64: "iVBORw0KGgo=", Filename: "image.png", Model: AIImageModel1Ultra, Sandbox: true,
-					MaskType: AIImageMaskHeatmap, ObjectDetection: []AIImageObject{{Object: "face"}, {Object: "hand"}},
+					MaskType: AIImageMaskHeatmap, ObjectDetection: &[]AIImageObject{{Object: "face"}, {Object: "hand"}},
 				})
 			},
 			check: func(t *testing.T, got any) {
@@ -268,7 +268,7 @@ func checkHeatmapResponse(t *testing.T, res *AIImageDetectionResponse) {
 		{Object: "face", Mask: &AIImageDetectionResult{Starts: []int{1024, 3072}, Lengths: []int{512, 256}}},
 		{Object: "hand", Mask: &AIImageDetectionResult{Starts: []int{8192}, Lengths: []int{128}}},
 	}
-	if !reflect.DeepEqual(res.DetectedObjects, want) {
+	if res.DetectedObjects == nil || !reflect.DeepEqual(*res.DetectedObjects, want) {
 		t.Errorf("detectedObjects: %+v", res.DetectedObjects)
 	}
 }
@@ -288,7 +288,7 @@ func TestSubmitNewScanProperties(t *testing.T) {
 		References:              &References{Validate: true},
 		AIGeneratedText:         &AIGeneratedText{Detect: true, Sensitivity: 3, Explain: &AIGeneratedTextExplain{Enable: true}},
 		Scanning: &Scanning{
-			Exclude: &ScanningExclude{IDPattern: "abc*", BacklinksDomains: []string{"example.com"}, Text: []string{"lorem ipsum"}},
+			Exclude: &ScanningExclude{IDPattern: "abc*", BacklinksDomains: &[]string{"example.com"}, Text: &[]string{"lorem ipsum"}},
 			Include: &ScanningInclude{IDPattern: "course-1-*"},
 		},
 		Indexing: &Indexing{CopyleaksDB: Ptr(true)},
@@ -545,7 +545,7 @@ func TestNewEndpointValidation(t *testing.T) {
 		{"async no webhook", async(func(r *AIImageAsyncSubmission) { r.Webhooks.URL = "" }), false},
 		{"image heatmap", image(func(r *AIImageDetectionRequest) { r.MaskType = AIImageMaskHeatmap }), true},
 		{"image mask Heatmap", image(func(r *AIImageDetectionRequest) { r.MaskType = "Heatmap" }), false},
-		{"image 4 objects", image(func(r *AIImageDetectionRequest) { r.ObjectDetection = objects("a", "b", "c", "d") }), false},
+		{"image 4 objects", image(func(r *AIImageDetectionRequest) { r.ObjectDetection = Ptr(objects("a", "b", "c", "d")) }), false},
 		{"upload ok", upload(func(r *AIImageUploadRequest) {}), true},
 		{"upload no image", upload(func(r *AIImageUploadRequest) { r.Image = nil }), false},
 		{"upload no model", upload(func(r *AIImageUploadRequest) { r.Model = "" }), false},
@@ -610,20 +610,20 @@ func TestNewScanPropertiesValidation(t *testing.T) {
 		{"sensitivity 4", func(p *ScanProperties) { p.AIGeneratedText = &AIGeneratedText{Detect: true, Sensitivity: 4} }, false},
 		{"sensitivity -1", func(p *ScanProperties) { p.AIGeneratedText = &AIGeneratedText{Detect: true, Sensitivity: -1} }, false},
 		{"10 backlink domains", func(p *ScanProperties) {
-			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: list(10, 256)}}
+			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: Ptr(list(10, 256))}}
 		}, true},
 		{"11 backlink domains", func(p *ScanProperties) {
-			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: list(11, 5)}}
+			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: Ptr(list(11, 5))}}
 		}, false},
 		{"backlink domain of 257", func(p *ScanProperties) {
-			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: list(1, 257)}}
+			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: Ptr(list(1, 257))}}
 		}, false},
 		{"empty backlink domain", func(p *ScanProperties) {
-			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: list(1, 0)}}
+			p.Scanning = &Scanning{Exclude: &ScanningExclude{BacklinksDomains: Ptr(list(1, 0))}}
 		}, false},
-		{"5 texts of 30", func(p *ScanProperties) { p.Scanning = &Scanning{Exclude: &ScanningExclude{Text: list(5, 30)}} }, true},
-		{"6 texts", func(p *ScanProperties) { p.Scanning = &Scanning{Exclude: &ScanningExclude{Text: list(6, 3)}} }, false},
-		{"text of 31", func(p *ScanProperties) { p.Scanning = &Scanning{Exclude: &ScanningExclude{Text: list(1, 31)}} }, false},
+		{"5 texts of 30", func(p *ScanProperties) { p.Scanning = &Scanning{Exclude: &ScanningExclude{Text: Ptr(list(5, 30))}} }, true},
+		{"6 texts", func(p *ScanProperties) { p.Scanning = &Scanning{Exclude: &ScanningExclude{Text: Ptr(list(6, 3))}} }, false},
+		{"text of 31", func(p *ScanProperties) { p.Scanning = &Scanning{Exclude: &ScanningExclude{Text: Ptr(list(1, 31))}} }, false},
 		{"include pattern of 36", func(p *ScanProperties) {
 			p.Scanning = &Scanning{Include: &ScanningInclude{IDPattern: strings.Repeat("a", 36)}}
 		}, true},
@@ -744,6 +744,46 @@ func TestParseAIImageWebhook(t *testing.T) {
 	}
 	if _, err := ParseAIImageWebhook([]byte(`[`)); err == nil || !strings.HasPrefix(err.Error(), "copyleaks: parse AI image webhook: ") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestParseAsyncFailureWebhooks(t *testing.T) {
+	body := []byte(`{"error":{"type":"invalid_request_error","id":"file-too-small","code":400,` +
+		`"message":"The file is too small.","url":"https://docs.copyleaks.com/errors",` +
+		`"details":[{"param":"url","message":"The file is too small."}]},"developerPayload":"order-1"}`)
+	want := &AsyncError{
+		Type: "invalid_request_error", ID: "file-too-small", Code: 400, Message: "The file is too small.",
+		URL: "https://docs.copyleaks.com/errors", Details: []WebhookErrorDetail{{Param: "url", Message: "The file is too small."}},
+	}
+	video, err := ParseAIVideoWebhook(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(video, &AIVideoDetectionResponse{Error: want, DeveloperPayload: "order-1"}) {
+		t.Errorf("video: got %+v, error %+v", video, video.Error)
+	}
+	image, err := ParseAIImageWebhook(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(image, &AIImageDetectionResponse{Error: want, DeveloperPayload: "order-1"}) {
+		t.Errorf("image: got %+v, error %+v", image, image.Error)
+	}
+	// Without the optional fields, and without a developer payload.
+	body = []byte(`{"error":{"type":"api_error","id":"internal","code":500,"message":"Something went wrong."}}`)
+	want = &AsyncError{Type: "api_error", ID: "internal", Code: 500, Message: "Something went wrong."}
+	if video, err = ParseAIVideoWebhook(body); err != nil || !reflect.DeepEqual(video.Error, want) || video.DeveloperPayload != "" {
+		t.Errorf("video: got %+v, %v", video, err)
+	}
+	if image, err = ParseAIImageWebhook(body); err != nil || !reflect.DeepEqual(image.Error, want) || image.Summary != nil {
+		t.Errorf("image: got %+v, %v", image, err)
+	}
+	// A successful result has no Error.
+	if video, err = ParseAIVideoWebhook([]byte(fixture(t, "ai_video_webhook.json"))); err != nil || video.Error != nil {
+		t.Errorf("video success: Error = %+v, %v", video.Error, err)
+	}
+	if image, err = ParseAIImageWebhook([]byte(fixture(t, "ai_image_heatmap_response.json"))); err != nil || image.Error != nil {
+		t.Errorf("image success: Error = %+v, %v", image.Error, err)
 	}
 }
 
