@@ -426,9 +426,6 @@ func TestEndpointRequestsAndResponses(t *testing.T) {
 			if got, want := req.header.Get("User-Agent"), "copyleaks-go-sdk/"+Version; got != want {
 				t.Errorf("User-Agent = %q, want %q", got, want)
 			}
-			if values := req.header.Values("X-Tenant"); len(values) != 0 {
-				t.Errorf("x-tenant = %q, want no header", values)
-			}
 			if tc.body == "" {
 				if len(req.body) != 0 || req.header.Get("Content-Type") != "" {
 					t.Errorf("unexpected body %q with Content-Type %q", req.body, req.header.Get("Content-Type"))
@@ -443,61 +440,6 @@ func TestEndpointRequestsAndResponses(t *testing.T) {
 				tc.check(t, got)
 			}
 		})
-	}
-}
-
-func TestTenantHeaderOnEveryEndpoint(t *testing.T) {
-	scenarios := []struct {
-		name       string
-		options    []Option
-		callTenant *string
-		want       string
-	}{
-		{"unset", nil, nil, ""},
-		{"client tenant", []Option{WithTenant("t1")}, nil, "t1"},
-		{"per-call tenant overrides client tenant", []Option{WithTenant("t1")}, Ptr("t2"), "t2"},
-		{"per-call tenant without client tenant", nil, Ptr("t3"), "t3"},
-		{"empty per-call tenant omits header", []Option{WithTenant("t1")}, Ptr(""), ""},
-	}
-	for _, tc := range endpointCases(t) {
-		for _, sc := range scenarios {
-			t.Run(tc.name+"/"+sc.name, func(t *testing.T) {
-				env := newTestEnv(t, tc.status, tc.response)
-				ctx := context.Background()
-				if sc.callTenant != nil {
-					ctx = WithCallTenant(ctx, *sc.callTenant)
-				}
-				if _, err := tc.call(ctx, env.client(t, sc.options...)); err != nil {
-					t.Fatalf("call failed: %v", err)
-				}
-				values := env.next(t).header.Values("X-Tenant")
-				switch {
-				case sc.want == "" && len(values) != 0:
-					t.Errorf("x-tenant = %q, want no header", values)
-				case sc.want != "" && (len(values) != 1 || values[0] != sc.want):
-					t.Errorf("x-tenant = %q, want %q", values, sc.want)
-				}
-			})
-		}
-	}
-}
-
-func TestTenantDoesNotLeakBetweenClients(t *testing.T) {
-	env := newTestEnv(t, http.StatusOK, `["en"]`)
-	withTenant := env.client(t, WithTenant("t1"))
-	without := env.client(t)
-	ctx := context.Background()
-	if _, err := withTenant.OCRSupportedLanguages(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got := env.next(t).header.Get("x-tenant"); got != "t1" {
-		t.Errorf("x-tenant = %q, want t1", got)
-	}
-	if _, err := without.OCRSupportedLanguages(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if got := env.next(t).header.Values("x-tenant"); len(got) != 0 {
-		t.Errorf("x-tenant = %q, want no header", got)
 	}
 }
 

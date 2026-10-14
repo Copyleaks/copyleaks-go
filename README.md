@@ -222,26 +222,6 @@ if err != nil {
 `http://localhost`, `http://127.0.0.1` and `http://[::1]` for local test servers; `NewClient` returns an
 error that matches `copyleaks.ErrInvalidArgument` otherwise.
 
-### Tenant header (`x-tenant`)
-
-`WithTenant` sends the `x-tenant` header on every request of a client, and `WithCallTenant` overrides it for one call.
-An empty per-call tenant omits the header. When no tenant is set, the header is not sent. The header only routes
-requests to an environment that Copyleaks directs you to; leave it unset unless Copyleaks tells you otherwise.
-
-```go
-client, err := copyleaks.NewClient(copyleaks.WithTenant("my-tenant"))
-if err != nil {
-	log.Fatal(err)
-}
-// This call sends "x-tenant: other-tenant" instead of "my-tenant".
-ctx := copyleaks.WithCallTenant(context.Background(), "other-tenant")
-notes, err := client.ReleaseNotes(ctx)
-if err != nil {
-	log.Fatal(err)
-}
-fmt.Println(len(notes.Updates), "release notes")
-```
-
 ## Examples
 
 Runnable programs for each product are in [examples](examples):
