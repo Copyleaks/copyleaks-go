@@ -90,7 +90,7 @@ type AIImageDetectionResponse struct {
 	// when it is set, the webhook carries no result, only Error and DeveloperPayload.
 	// DetectAIImage and DetectAIImageUpload return an *APIError instead, and never set
 	// it.
-	Error *AsyncError `json:"error,omitempty"`
+	Error *WebhookError `json:"error,omitempty"`
 }
 
 // AIImageDetectionResult is a run-length encoded mask, as parallel start and length lists.
@@ -295,25 +295,6 @@ type ResultWebhook struct {
 	URL string `json:"url"`
 	// Headers are extra headers of the webhook request, as [name, value] pairs.
 	Headers [][]string `json:"headers,omitempty"`
-}
-
-// AsyncError tells why an asynchronous check, such as SubmitAIImageAsync or
-// SubmitAIVideo, failed. Copyleaks sends it to the result webhook instead of the
-// result.
-type AsyncError struct {
-	// Type is the error type, such as "invalid_request_error".
-	Type string `json:"type"`
-	// ID is the machine-readable error ID.
-	ID string `json:"id"`
-	// Code is the numeric error code.
-	Code int `json:"code"`
-	// Message is a human-readable description of the error.
-	Message string `json:"message"`
-	// URL links to the documentation of the error, when the server sends it.
-	URL string `json:"url,omitempty"`
-	// Details describe the request parameters that caused the error, when the server
-	// sends them.
-	Details []WebhookErrorDetail `json:"details,omitempty"`
 }
 
 // AIImageAsyncSubmission is the body of SubmitAIImageAsync.

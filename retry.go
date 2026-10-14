@@ -160,7 +160,8 @@ func transientNetError(err error) bool {
 	}
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
-		return true
+		// A TLS alert from the server (for example a rejected handshake) is not a connection problem.
+		return opErr.Op != "remote error"
 	}
 	msg := err.Error()
 	for _, m := range http2ConnErrors {

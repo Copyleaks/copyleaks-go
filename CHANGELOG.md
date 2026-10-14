@@ -15,7 +15,7 @@ This release adds to the API of 1.0.0. It removes, renames and changes no functi
   `ObjectDetection`, with the response fields `Result.Labels` and `DetectedObjects`. In `AIImageDetectionRequest`
   and `AIImageDetectionResponse`, `ObjectDetection` and `DetectedObjects` are pointers to slices, such as
   `&[]copyleaks.AIImageObject{{Object: "face"}}`, so that both types stay comparable, as in 1.0.0.
-- `AIImageDetectionResponse.Error` and `AIVideoDetectionResponse.Error` (`AsyncError`) tell why a check submitted
+- `AIImageDetectionResponse.Error` and `AIVideoDetectionResponse.Error` (a `WebhookError`, as in error webhooks) tell why a check submitted
   with `SubmitAIImageAsync` or `SubmitAIVideo` failed. Check `Error` first in the webhook handler.
 - Lookups: `AITextCreditsBalance`, `RepositoryInfo` (Private Cloud Hub), `AllowedCrossLanguages` and
   `SupportedAITextFileTypes`. `AllowedCrossLanguages` maps language names to codes, as the server sends them,

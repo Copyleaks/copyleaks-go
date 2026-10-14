@@ -67,6 +67,7 @@ func TestTransientNetError(t *testing.T) {
 		{"wrong host certificate", dial(x509.HostnameError{Certificate: &x509.Certificate{}, Host: "api.copyleaks.com"}), false},
 		{"expired certificate", dial(x509.CertificateInvalidError{Reason: x509.Expired}), false},
 		{"unknown authority", dial(x509.UnknownAuthorityError{}), false},
+		{"tls alert", wrap(&net.OpError{Op: "remote error", Err: errors.New("tls: handshake failure")}), false},
 		{"redirects", wrap(errors.New("stopped after 10 redirects")), false},
 		{"other", errors.New("something else"), false},
 	}

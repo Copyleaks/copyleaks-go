@@ -102,7 +102,7 @@ type AIVideoDetectionResponse struct {
 	DeveloperPayload string `json:"developerPayload,omitempty"`
 	// Error tells why the check failed. Check it first: when it is set, the webhook
 	// carries no result, only Error and DeveloperPayload.
-	Error *AsyncError `json:"error,omitempty"`
+	Error *WebhookError `json:"error,omitempty"`
 }
 
 // AIVideoTrackResult are the AI-generated segments of a track of a video, as parallel

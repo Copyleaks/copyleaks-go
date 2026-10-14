@@ -751,7 +751,7 @@ func TestParseAsyncFailureWebhooks(t *testing.T) {
 	body := []byte(`{"error":{"type":"invalid_request_error","id":"file-too-small","code":400,` +
 		`"message":"The file is too small.","url":"https://docs.copyleaks.com/errors",` +
 		`"details":[{"param":"url","message":"The file is too small."}]},"developerPayload":"order-1"}`)
-	want := &AsyncError{
+	want := &WebhookError{
 		Type: "invalid_request_error", ID: "file-too-small", Code: 400, Message: "The file is too small.",
 		URL: "https://docs.copyleaks.com/errors", Details: []WebhookErrorDetail{{Param: "url", Message: "The file is too small."}},
 	}
@@ -771,7 +771,7 @@ func TestParseAsyncFailureWebhooks(t *testing.T) {
 	}
 	// Without the optional fields, and without a developer payload.
 	body = []byte(`{"error":{"type":"api_error","id":"internal","code":500,"message":"Something went wrong."}}`)
-	want = &AsyncError{Type: "api_error", ID: "internal", Code: 500, Message: "Something went wrong."}
+	want = &WebhookError{Type: "api_error", ID: "internal", Code: 500, Message: "Something went wrong."}
 	if video, err = ParseAIVideoWebhook(body); err != nil || !reflect.DeepEqual(video.Error, want) || video.DeveloperPayload != "" {
 		t.Errorf("video: got %+v, %v", video, err)
 	}
