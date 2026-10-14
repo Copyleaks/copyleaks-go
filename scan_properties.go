@@ -212,8 +212,10 @@ type CrossLanguage struct {
 type Indexing struct {
 	// Repositories are the Private Cloud Hubs to index the content in.
 	Repositories []IndexingRepository `json:"repositories,omitempty"`
-	// CopyleaksDB adds the content to the Copyleaks Shared Data Hub.
-	CopyleaksDB bool `json:"copyleaksDb,omitempty"`
+	// CopyleaksDB sets whether the content is added to the Copyleaks Shared Data Hub. Nil
+	// keeps the server default: the content is added when Scanning.CopyleaksDB compares
+	// it against any submissions. Set it with Ptr.
+	CopyleaksDB *bool `json:"copyleaksDb,omitempty"`
 }
 
 // IndexingRepository is a Private Cloud Hub to index the content in.

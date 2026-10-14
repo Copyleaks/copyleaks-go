@@ -291,7 +291,7 @@ func TestSubmitNewScanProperties(t *testing.T) {
 			Exclude: &ScanningExclude{IDPattern: "abc*", BacklinksDomains: []string{"example.com"}, Text: []string{"lorem ipsum"}},
 			Include: &ScanningInclude{IDPattern: "course-1-*"},
 		},
-		Indexing: &Indexing{CopyleaksDB: true},
+		Indexing: &Indexing{CopyleaksDB: Ptr(true)},
 		PDF:      &PDF{Create: true, Colors: &PDFColors{AIDetection: "#FE5758", WritingFeedback: "#FF9A02"}},
 	}
 	want := `{"webhooks":{"status":"https://example.com/webhook/{STATUS}"},"sandbox":true,` +
@@ -320,13 +320,14 @@ func TestSubmitNewScanProperties(t *testing.T) {
 		InternalAISourceMatch: &InternalAISourceMatch{},
 		References:            &References{},
 		AIGeneratedText:       &AIGeneratedText{Explain: &AIGeneratedTextExplain{}},
+		Indexing:              &Indexing{CopyleaksDB: Ptr(false)},
 	}
 	if err := env.client(t).SubmitURL(context.Background(), testToken(), "scan-1", &URLSubmission{URL: "https://example.com", Properties: props}); err != nil {
 		t.Fatal(err)
 	}
 	assertJSONEqual(t, env.next(t).body, `{"url":"https://example.com","properties":{"webhooks":{"status":"https://example.com/webhook/{STATUS}"},`+
 		`"aiGeneratedText":{"detect":false,"explain":{"enable":false}},"writingFeedback":{"enable":false},"overview":{"enable":false},`+
-		`"internalAiSourceMatch":{"enable":false},"references":{"validate":false}}}`)
+		`"internalAiSourceMatch":{"enable":false},"references":{"validate":false},"indexing":{"copyleaksDb":false}}}`)
 }
 
 // multipartRequest is a multipart/form-data request that a test server received.

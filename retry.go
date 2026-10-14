@@ -35,9 +35,9 @@ const (
 // Retry-After delay of the response when it has one, and otherwise for an exponential
 // backoff with jitter: about BaseDelay, then twice that, and so on, up to MaxDelay.
 //
-// When a submit or an export is retried after a network error that hit it after the
-// whole request was sent, the first attempt may have reached the server. A retry that
-// then gets HTTP 409 Conflict counts as a success, as the scan or the export exists.
+// When an attempt of a submit or an export fails with a network error after the whole
+// request was sent, the server may have processed it. If a later attempt then gets HTTP
+// 409 Conflict, the call counts as a success, as the scan or the export exists.
 type RetryPolicy struct {
 	// MaxAttempts is the number of attempts of each call, including the first one.
 	// Values below 2 turn retries off.
