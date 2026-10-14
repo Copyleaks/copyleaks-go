@@ -1,6 +1,6 @@
 //go:build !plan9
 
-package copyleaks
+package netretry
 
 import "syscall"
 

@@ -5,6 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
+)
+
+// The shortest and the longest text, in UTF-16 code units, that AI Text Detection
+// accepts.
+const (
+	minAITextLength = 255
+	maxAITextLength = 100000
 )
 
 // AITextDetectionRequest is the body of DetectAIText.
@@ -174,13 +183,13 @@ type ScannedDocument struct {
 //
 // See https://docs.copyleaks.com/reference/actions/writer-detector/check.
 func (c *Client) DetectAIText(ctx context.Context, token *AuthToken, scanID string, req *AITextDetectionRequest) (*AITextDetectionResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil {
 		return nil, invalid("request is required")
 	}
-	if n := utf16Len(req.Text); n < minAITextLength || n > maxAITextLength {
+	if n := validate.UTF16Len(req.Text); n < minAITextLength || n > maxAITextLength {
 		return nil, invalid(fmt.Sprintf("Text must be %d to %d characters, got %d", minAITextLength, maxAITextLength, n))
 	}
 	if req.Sensitivity != nil && (*req.Sensitivity < 1 || *req.Sensitivity > 3) {

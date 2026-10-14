@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/Copyleaks/copyleaks-go/internal/upload"
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // AIImageModel1Ultra is the AI Image Detection model "ai-image-1-ultra". It produces a
@@ -155,8 +158,8 @@ type AIImageMetadata struct {
 //
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/check.
 func (c *Client) DetectAIImage(ctx context.Context, token *AuthToken, scanID string, req *AIImageDetectionRequest) (*AIImageDetectionResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil || req.Base64 == "" || req.Model == "" {
 		return nil, invalid("Base64 and Model are required")
@@ -216,8 +219,8 @@ type AIImageUploadRequest struct {
 //
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/check.
 func (c *Client) DetectAIImageUpload(ctx context.Context, token *AuthToken, scanID string, req *AIImageUploadRequest) (*AIImageDetectionResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil || len(req.Image) == 0 || req.Model == "" {
 		return nil, invalid("Image and Model are required")
@@ -228,21 +231,21 @@ func (c *Client) DetectAIImageUpload(ctx context.Context, token *AuthToken, scan
 	if err := VerifyAuthToken(token); err != nil {
 		return nil, err
 	}
-	fields := []formField{{"filename", req.Filename}, {"model", req.Model}}
+	fields := []upload.Field{{Name: "filename", Value: req.Filename}, {Name: "model", Value: req.Model}}
 	if req.Sandbox {
-		fields = append(fields, formField{"sandbox", "true"})
+		fields = append(fields, upload.Field{Name: "sandbox", Value: "true"})
 	}
 	if req.MaskType != "" {
-		fields = append(fields, formField{"maskType", req.MaskType})
+		fields = append(fields, upload.Field{Name: "maskType", Value: req.MaskType})
 	}
 	if len(req.ObjectDetection) > 0 {
 		objects, err := encodeJSON(req.ObjectDetection)
 		if err != nil {
 			return nil, fmt.Errorf("copyleaks: encode POST /v1/ai-image-detector request: %w", err)
 		}
-		fields = append(fields, formField{"objectDetection", string(objects)})
+		fields = append(fields, upload.Field{Name: "objectDetection", Value: string(objects)})
 	}
-	body, contentType, err := multipartBody("image", req.Filename, req.Image, fields)
+	body, contentType, err := upload.MultipartBody("image", req.Filename, req.Image, fields)
 	if err != nil {
 		return nil, fmt.Errorf("copyleaks: encode POST /v1/ai-image-detector request: %w", err)
 	}
@@ -263,7 +266,7 @@ func (c *Client) DetectAIImageUpload(ctx context.Context, token *AuthToken, scan
 // validateAIImageOptions checks the filename, the mask type and the object detection
 // list of an AI Image Detection request.
 func validateAIImageOptions(filename, maskType string, objects []AIImageObject) error {
-	if n := utf16Len(filename); n < 5 || n > 254 || !hasAIImageExtension(filename) {
+	if n := validate.UTF16Len(filename); n < 5 || n > 254 || !validate.HasAIImageExtension(filename) {
 		return invalid("Filename must be 5 to 254 characters and end with .png, .jpg, .jpeg, .bmp, .webp, .heic, .heif or .avif")
 	}
 	switch maskType {
@@ -281,7 +284,7 @@ func validateAIImageObjects(objects []AIImageObject) error {
 		return invalid(fmt.Sprintf("ObjectDetection must list at most %d objects", maxAIImageObjects))
 	}
 	for _, o := range objects {
-		if n := utf16Len(o.Object); n < 1 || n > maxAIImageObjectLength {
+		if n := validate.UTF16Len(o.Object); n < 1 || n > maxAIImageObjectLength {
 			return invalid(fmt.Sprintf("each ObjectDetection object must be 1 to %d characters", maxAIImageObjectLength))
 		}
 	}
@@ -329,19 +332,19 @@ type AIImageAsyncSubmission struct {
 //
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/submit.
 func (c *Client) SubmitAIImageAsync(ctx context.Context, token *AuthToken, scanID string, req *AIImageAsyncSubmission) error {
-	if err := validateID("scan ID", scanID); err != nil {
-		return err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if req == nil || req.URL == "" || req.Model == "" || req.Webhooks.URL == "" {
 		return invalid("URL, Model and Webhooks.URL are required")
 	}
-	if n := utf16Len(req.FileName); n < 4 || n > 254 || !hasAIImageExtension(req.FileName) {
+	if n := validate.UTF16Len(req.FileName); n < 4 || n > 254 || !validate.HasAIImageExtension(req.FileName) {
 		return invalid("FileName must be up to 254 characters and end with .png, .jpg, .jpeg, .bmp, .webp, .heic, .heif or .avif")
 	}
 	if err := validateAIImageObjects(req.ObjectDetection); err != nil {
 		return err
 	}
-	if utf16Len(req.DeveloperPayload) > maxAsyncDeveloperPayload {
+	if validate.UTF16Len(req.DeveloperPayload) > maxAsyncDeveloperPayload {
 		return invalid(fmt.Sprintf("DeveloperPayload must be at most %d characters", maxAsyncDeveloperPayload))
 	}
 	if err := VerifyAuthToken(token); err != nil {

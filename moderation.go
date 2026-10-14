@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // Text Moderation label IDs. See
@@ -113,13 +115,13 @@ type TextModerationLegend struct {
 //
 // See https://docs.copyleaks.com/reference/actions/text-moderation/check.
 func (c *Client) ModerateText(ctx context.Context, token *AuthToken, scanID string, req *TextModerationRequest) (*TextModerationResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil {
 		return nil, invalid("request is required")
 	}
-	if n := utf16Len(req.Text); n < minTextModerationLength || n > maxTextModerationLength {
+	if n := validate.UTF16Len(req.Text); n < minTextModerationLength || n > maxTextModerationLength {
 		return nil, invalid(fmt.Sprintf("Text must be %d to %d characters, got %d", minTextModerationLength, maxTextModerationLength, n))
 	}
 	if n := len(req.Labels); n == 0 || n > maxTextModerationLabels {

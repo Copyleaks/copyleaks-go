@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/Copyleaks/copyleaks-go/internal/upload"
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // imagePlagiarismExtensions are the file extensions that the Image Plagiarism Detector
@@ -103,26 +106,26 @@ type ImagePlagiarismScore struct {
 //
 // See https://docs.copyleaks.com/reference/actions/image-plagiarism-detector/check.
 func (c *Client) CheckImagePlagiarism(ctx context.Context, token *AuthToken, scanID string, req *ImagePlagiarismRequest) (*ImagePlagiarismResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil || len(req.Image) == 0 {
 		return nil, invalid("Image is required")
 	}
-	if n := utf16Len(req.Filename); n < 1 || n > 255 || !hasExtension(req.Filename, imagePlagiarismExtensions) {
+	if n := validate.UTF16Len(req.Filename); n < 1 || n > 255 || !hasExtension(req.Filename, imagePlagiarismExtensions) {
 		return nil, invalid("Filename must be up to 255 characters and end with .jpg, .jpeg, .png, .gif, .bmp, .webp or .ico")
 	}
 	if err := VerifyAuthToken(token); err != nil {
 		return nil, err
 	}
-	fields := []formField{{"filename", req.Filename}}
+	fields := []upload.Field{{Name: "filename", Value: req.Filename}}
 	if req.Sandbox {
-		fields = append(fields, formField{"sandbox", "true"})
+		fields = append(fields, upload.Field{Name: "sandbox", Value: "true"})
 	}
 	if req.DeveloperPayload != "" {
-		fields = append(fields, formField{"developerPayload", req.DeveloperPayload})
+		fields = append(fields, upload.Field{Name: "developerPayload", Value: req.DeveloperPayload})
 	}
-	body, contentType, err := multipartBody("image", req.Filename, req.Image, fields)
+	body, contentType, err := upload.MultipartBody("image", req.Filename, req.Image, fields)
 	if err != nil {
 		return nil, fmt.Errorf("copyleaks: encode POST /v1/image-plagiarism-detector request: %w", err)
 	}

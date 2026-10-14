@@ -1,6 +1,10 @@
 package copyleaks
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
+)
 
 // ScanProperties configures a Plagiarism Checker scan. Only Webhooks.Status is required.
 // Every other field is optional and is left out of the request when it has its zero
@@ -488,7 +492,7 @@ func (s *Scanning) validate() error {
 		return nil
 	}
 	if e := s.Exclude; e != nil {
-		if utf16Len(e.IDPattern) > 36 {
+		if validate.UTF16Len(e.IDPattern) > 36 {
 			return invalid("Properties.Scanning.Exclude.IDPattern must be 1 to 36 characters")
 		}
 		if err := checkStrings("Properties.Scanning.Exclude.BacklinksDomains", valueOf(e.BacklinksDomains), 10, 256); err != nil {
@@ -498,7 +502,7 @@ func (s *Scanning) validate() error {
 			return err
 		}
 	}
-	if s.Include != nil && utf16Len(s.Include.IDPattern) > 36 {
+	if s.Include != nil && validate.UTF16Len(s.Include.IDPattern) > 36 {
 		return invalid("Properties.Scanning.Include.IDPattern must be 1 to 36 characters")
 	}
 	return nil
@@ -511,7 +515,7 @@ func checkStrings(name string, list []string, maxItems, maxLength int) error {
 		return invalid(fmt.Sprintf("%s must list at most %d items", name, maxItems))
 	}
 	for _, v := range list {
-		if n := utf16Len(v); n < 1 || n > maxLength {
+		if n := validate.UTF16Len(v); n < 1 || n > maxLength {
 			return invalid(fmt.Sprintf("each of %s must be 1 to %d characters", name, maxLength))
 		}
 	}
@@ -523,7 +527,7 @@ func (p *ScanProperties) validate() error {
 	if p.Webhooks.Status == "" {
 		return invalid("Properties.Webhooks.Status is required")
 	}
-	if utf16Len(p.DeveloperPayload) > 512 {
+	if validate.UTF16Len(p.DeveloperPayload) > 512 {
 		return invalid("Properties.DeveloperPayload must be at most 512 characters")
 	}
 	if p.SensitivityLevel != 0 && (p.SensitivityLevel < 1 || p.SensitivityLevel > 5) {
@@ -543,7 +547,7 @@ func (p *ScanProperties) validate() error {
 		ids = append(ids, p.Institution.ID)
 	}
 	for _, id := range ids {
-		if utf16Len(id) > maxAnalyticsIDLength {
+		if validate.UTF16Len(id) > maxAnalyticsIDLength {
 			return invalid(fmt.Sprintf("Properties.Course.ID, Assignment.ID and Institution.ID must be at most %d characters", maxAnalyticsIDLength))
 		}
 	}

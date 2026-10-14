@@ -1,9 +1,8 @@
 //go:build !plan9
 
-package copyleaks
+package netretry
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -14,25 +13,7 @@ import (
 	"os"
 	"syscall"
 	"testing"
-	"time"
 )
-
-func TestRetryConnectionRefused(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	addr := ln.Addr().String()
-	ln.Close()
-	c, slept := retryClientFor(t, "http://"+addr, RetryPolicy{MaxAttempts: 3, BaseDelay: time.Millisecond})
-	var opErr *net.OpError
-	if _, err := c.CreditsBalance(context.Background(), testToken()); !errors.As(err, &opErr) || opErr.Op != "dial" {
-		t.Fatalf("err = %v, want a refused connection", err)
-	}
-	if len(*slept) != 2 {
-		t.Errorf("%d waits, want 2", len(*slept))
-	}
-}
 
 // timeoutError is a net.Error that reports a timeout.
 type timeoutError struct{}
@@ -41,7 +22,7 @@ func (timeoutError) Error() string   { return "i/o timeout" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
 
-func TestTransientNetError(t *testing.T) {
+func TestTransient(t *testing.T) {
 	wrap := func(err error) error { return &url.Error{Op: "Post", URL: "https://api.copyleaks.com/v3", Err: err} }
 	dial := func(err error) error { return wrap(&net.OpError{Op: "dial", Net: "tcp", Err: err}) }
 	tests := []struct {
@@ -72,8 +53,8 @@ func TestTransientNetError(t *testing.T) {
 		{"other", errors.New("something else"), false},
 	}
 	for _, tt := range tests {
-		if got := transientNetError(tt.err); got != tt.want {
-			t.Errorf("%s: transientNetError(%v) = %v, want %v", tt.name, tt.err, got, tt.want)
+		if got := Transient(tt.err); got != tt.want {
+			t.Errorf("%s: Transient(%v) = %v, want %v", tt.name, tt.err, got, tt.want)
 		}
 	}
 }

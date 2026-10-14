@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // FileSubmission is the body of SubmitFile.
@@ -64,14 +66,14 @@ type URLSubmission struct {
 //
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-file.
 func (c *Client) SubmitFile(ctx context.Context, token *AuthToken, scanID string, req *FileSubmission) error {
-	if err := validateSubmitScanID(scanID); err != nil {
-		return err
+	if err := validate.SubmitScanID(scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if req == nil || req.Filename == "" {
 		return invalid("Filename and either Base64 or Content are required")
 	}
-	if err := checkUploadContent(req.Base64, req.Content); err != nil {
-		return err
+	if err := validate.UploadContent(req.Base64, req.Content); err != nil {
+		return invalid(err.Error())
 	}
 	if err := req.Properties.validate(); err != nil {
 		return err
@@ -100,14 +102,14 @@ func (c *Client) SubmitFile(ctx context.Context, token *AuthToken, scanID string
 //
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-ocr.
 func (c *Client) SubmitOCR(ctx context.Context, token *AuthToken, scanID string, req *OCRSubmission) error {
-	if err := validateSubmitScanID(scanID); err != nil {
-		return err
+	if err := validate.SubmitScanID(scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if req == nil || req.Filename == "" || req.LangCode == "" {
 		return invalid("Filename, LangCode and either Base64 or Content are required")
 	}
-	if err := checkUploadContent(req.Base64, req.Content); err != nil {
-		return err
+	if err := validate.UploadContent(req.Base64, req.Content); err != nil {
+		return invalid(err.Error())
 	}
 	if err := req.Properties.validate(); err != nil {
 		return err
@@ -135,8 +137,8 @@ func (c *Client) SubmitOCR(ctx context.Context, token *AuthToken, scanID string,
 //
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-url.
 func (c *Client) SubmitURL(ctx context.Context, token *AuthToken, scanID string, req *URLSubmission) error {
-	if err := validateSubmitScanID(scanID); err != nil {
-		return err
+	if err := validate.SubmitScanID(scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if req == nil || req.URL == "" {
 		return invalid("URL is required")
@@ -222,11 +224,11 @@ type ExportTarget struct {
 //
 // See https://docs.copyleaks.com/reference/actions/downloads/export.
 func (c *Client) Export(ctx context.Context, token *AuthToken, scanID, exportID string, req *ExportRequest) error {
-	if err := validateExportID("scan ID", scanID); err != nil {
-		return err
+	if err := validate.ExportID("scan ID", scanID); err != nil {
+		return invalid(err.Error())
 	}
-	if err := validateExportID("export ID", exportID); err != nil {
-		return err
+	if err := validate.ExportID("export ID", exportID); err != nil {
+		return invalid(err.Error())
 	}
 	if err := req.validate(); err != nil {
 		return err
@@ -383,8 +385,8 @@ func (c *Client) Delete(ctx context.Context, token *AuthToken, req *DeleteReques
 //
 // See https://docs.copyleaks.com/reference/actions/authenticity/resend-webhook.
 func (c *Client) ResendWebhook(ctx context.Context, token *AuthToken, scanID string) error {
-	if err := validateID("scan ID", scanID); err != nil {
-		return err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if err := VerifyAuthToken(token); err != nil {
 		return err

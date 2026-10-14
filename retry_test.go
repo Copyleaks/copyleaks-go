@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -328,6 +329,23 @@ func TestRetryExportNotAfter503(t *testing.T) {
 	}
 	if n := len(s.requests()); n != 1 || len(*slept) != 0 {
 		t.Errorf("%d requests and %d waits, want 1 and 0", n, len(*slept))
+	}
+}
+
+func TestRetryConnectionRefused(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+	c, slept := retryClientFor(t, "http://"+addr, RetryPolicy{MaxAttempts: 3, BaseDelay: time.Millisecond})
+	var opErr *net.OpError
+	if _, err := c.CreditsBalance(context.Background(), testToken()); !errors.As(err, &opErr) || opErr.Op != "dial" {
+		t.Fatalf("err = %v, want a refused connection", err)
+	}
+	if len(*slept) != 2 {
+		t.Errorf("%d waits, want 2", len(*slept))
 	}
 }
 

@@ -12,6 +12,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/Copyleaks/copyleaks-go/internal/netretry"
+	"github.com/Copyleaks/copyleaks-go/internal/upload"
 )
 
 const (
@@ -235,6 +238,18 @@ func encodeJSON(v any) ([]byte, error) {
 	return b[:len(b)-1], nil // Encode ends the value with a newline.
 }
 
+// base64Body returns the JSON body of an upload request. v is the request, with its
+// Base64 field, which must be its first field, set to "". The body holds b64, or, when
+// raw is not empty, the base64 encoding of raw, as the base64 field (see
+// upload.Base64Body).
+func base64Body(v any, b64 string, raw []byte) ([]byte, error) {
+	head, err := encodeJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	return upload.Base64Body(head, b64, raw)
+}
+
 // attemptResult is the outcome of one attempt of a request.
 type attemptResult struct {
 	// err is nil on success.
@@ -244,7 +259,7 @@ type attemptResult struct {
 	// retryAfter is the delay that the Retry-After header of the response asked for.
 	retryAfter time.Duration
 	// transient reports a failure that a retry may fix: HTTP 429 or 503, or a
-	// connection error (see transientNetError).
+	// connection error (see netretry.Transient).
 	transient bool
 	// maybeProcessed reports a network error after the whole request was sent, so the
 	// server may have processed it.
@@ -342,7 +357,7 @@ func (c *Client) attempt(ctx context.Context, r apiRequest, target string, body 
 	if err != nil {
 		return attemptResult{
 			err:            fmt.Errorf("copyleaks: %s %s: %w", r.method, r.path, err),
-			transient:      ctx.Err() == nil && transientNetError(err),
+			transient:      ctx.Err() == nil && netretry.Transient(err),
 			maybeProcessed: wrote.Load(),
 		}
 	}
@@ -367,7 +382,7 @@ func (c *Client) attempt(ctx context.Context, r apiRequest, target string, body 
 	readFailed := func(err error) attemptResult {
 		return attemptResult{
 			err:            fmt.Errorf("copyleaks: read %s %s response: %w", r.method, r.path, err),
-			transient:      ctx.Err() == nil && transientNetError(err),
+			transient:      ctx.Err() == nil && netretry.Transient(err),
 			maybeProcessed: true,
 		}
 	}

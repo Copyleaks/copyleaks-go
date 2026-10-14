@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // AIVideoModel1Pro is the AI Video Detection model "ai-video-1-pro".
@@ -51,19 +53,19 @@ type AIVideoSubmission struct {
 //
 // See https://docs.copyleaks.com/reference/actions/ai-video-detector/submit.
 func (c *Client) SubmitAIVideo(ctx context.Context, token *AuthToken, scanID string, req *AIVideoSubmission) error {
-	if err := validateID("scan ID", scanID); err != nil {
-		return err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if req == nil || req.URL == "" || req.Model == "" || req.Webhooks.URL == "" {
 		return invalid("URL, Model and Webhooks.URL are required")
 	}
-	if n := utf16Len(req.Filename); n < 4 || n > 254 || !hasExtension(req.Filename, aiVideoExtensions) {
+	if n := validate.UTF16Len(req.Filename); n < 4 || n > 254 || !hasExtension(req.Filename, aiVideoExtensions) {
 		return invalid("Filename must be up to 254 characters and end with .mp4, .avi, .mov, .mkv, .webm, .flv, .wmv, .mpg, .m4v, .3gp or .mxf")
 	}
 	if err := validateVerb(req.Verb); err != nil {
 		return err
 	}
-	if utf16Len(req.DeveloperPayload) > maxAsyncDeveloperPayload {
+	if validate.UTF16Len(req.DeveloperPayload) > maxAsyncDeveloperPayload {
 		return invalid(fmt.Sprintf("DeveloperPayload must be at most %d characters", maxAsyncDeveloperPayload))
 	}
 	if err := VerifyAuthToken(token); err != nil {

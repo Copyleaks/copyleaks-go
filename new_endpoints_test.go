@@ -960,18 +960,6 @@ func TestNewEndpointErrors(t *testing.T) {
 	}
 }
 
-func TestImageContentType(t *testing.T) {
-	for filename, want := range map[string]string{
-		"a.png": "image/png", "a.JPG": "image/jpeg", "a.jpeg": "image/jpeg", "a.gif": "image/gif", "a.bmp": "image/bmp",
-		"a.webp": "image/webp", "a.ico": "image/x-icon", "a.heic": "image/heic", "a.heif": "image/heif", "a.avif": "image/avif",
-		"a.tif": "image/tiff", "a.tiff": "image/tiff", "a.raw": "application/octet-stream", "noext": "application/octet-stream",
-	} {
-		if got := imageContentType(filename); got != want {
-			t.Errorf("imageContentType(%q) = %q, want %q", filename, got, want)
-		}
-	}
-}
-
 func TestMultipartFilenameIsEscaped(t *testing.T) {
 	env := newTestEnv(t, http.StatusOK, "{}")
 	req := &ImagePlagiarismRequest{Image: []byte{1, 2}, Filename: "my \"best\"\r\nphoto.png"}

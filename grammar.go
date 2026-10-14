@@ -3,6 +3,8 @@ package copyleaks
 import (
 	"context"
 	"net/http"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // GrammarCheckRequest is the body of CheckGrammar.
@@ -144,8 +146,8 @@ type GrammarCorrectionRanges struct {
 //
 // See https://docs.copyleaks.com/reference/actions/writing-assistant/check.
 func (c *Client) CheckGrammar(ctx context.Context, token *AuthToken, scanID string, req *GrammarCheckRequest) (*GrammarCheckResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil || req.Text == "" {
 		return nil, invalid("Text is required")

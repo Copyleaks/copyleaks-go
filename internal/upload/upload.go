@@ -1,8 +1,12 @@
-package copyleaks
+// Package upload builds the bodies of the requests that upload a file: JSON with the
+// file as base64 text, and multipart/form-data with the file as it is. Each body is
+// built in one buffer, so that a large upload costs about one copy of the file.
+package upload
 
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"mime/multipart"
 	"net/textproto"
@@ -14,30 +18,22 @@ import (
 // `json:"base64"` starts when that field is empty.
 const base64Prefix = `{"base64":""`
 
-// base64Body returns the JSON body of an upload request. v is the request, with its
-// Base64 field, which must be its first field, set to "". The body holds b64, or, when
-// raw is not empty, the base64 encoding of raw, as the base64 field.
+// Base64Body returns the JSON body of an upload request. head is the JSON of the
+// request with its base64 field, which must be its first field, set to "". The body
+// holds b64, or, when raw is not empty, the base64 encoding of raw, as the base64 field.
 //
 // It builds the body in one buffer of the exact size, so that a large upload costs about
 // one copy of its base64 text, instead of the several copies that encoding the whole
 // request with encoding/json makes.
-func base64Body(v any, b64 string, raw []byte) ([]byte, error) {
-	rest, err := encodeJSON(v)
-	if err != nil {
-		return nil, err
-	}
-	if !bytes.HasPrefix(rest, []byte(base64Prefix)) {
+func Base64Body(head []byte, b64 string, raw []byte) ([]byte, error) {
+	if !bytes.HasPrefix(head, []byte(base64Prefix)) {
 		return nil, errors.New("the request does not start with its base64 field")
 	}
-	rest = rest[len(base64Prefix):]
+	rest := head[len(base64Prefix):]
 	useRaw := len(raw) > 0
 	if !useRaw && !jsonSafe(b64) {
 		// Not base64 text: let encoding/json quote it. The server rejects it anyway.
-		quoted, err := encodeJSON(b64)
-		if err != nil {
-			return nil, err
-		}
-		return append(append([]byte(`{"base64":`), quoted...), rest...), nil
+		return append(append([]byte(`{"base64":`), quote(b64)...), rest...), nil
 	}
 	n := len(b64)
 	if useRaw {
@@ -67,20 +63,30 @@ func jsonSafe(s string) bool {
 	return true
 }
 
-// formField is a text field of a multipart/form-data body.
-type formField struct {
-	name  string
-	value string
+// quote returns s as a JSON string. Like the JSON of the rest of the request, it does
+// not escape <, > and &.
+func quote(s string) []byte {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(s) // A string always encodes.
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
 }
 
-// multipartBody returns a multipart/form-data body with the file content in the field
+// Field is a text field of a multipart/form-data body.
+type Field struct {
+	Name  string
+	Value string
+}
+
+// MultipartBody returns a multipart/form-data body with the file content in the field
 // fileField, followed by fields, and the Content-Type header that goes with it. The body
 // is built in one buffer that is sized for the file, so that the upload costs about one
 // copy of the file.
-func multipartBody(fileField, filename string, content []byte, fields []formField) ([]byte, string, error) {
+func MultipartBody(fileField, filename string, content []byte, fields []Field) ([]byte, string, error) {
 	size := len(content) + 1024
 	for _, f := range fields {
-		size += len(f.name) + len(f.value) + 128
+		size += len(f.Name) + len(f.Value) + 128
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, size))
 	w := multipart.NewWriter(buf)
@@ -95,7 +101,7 @@ func multipartBody(fileField, filename string, content []byte, fields []formFiel
 		return nil, "", err
 	}
 	for _, f := range fields {
-		if err := w.WriteField(f.name, f.value); err != nil {
+		if err := w.WriteField(f.Name, f.Value); err != nil {
 			return nil, "", err
 		}
 	}
