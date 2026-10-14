@@ -90,3 +90,15 @@ func utf16Len(s string) int {
 	}
 	return n
 }
+
+// checkUploadContent checks that exactly one of the Base64 and Content fields of an
+// upload request is set.
+func checkUploadContent(b64 string, content []byte) error {
+	switch {
+	case b64 == "" && len(content) == 0:
+		return invalid("either Base64 or Content is required")
+	case b64 != "" && len(content) > 0:
+		return invalid("set either Base64 or Content, not both")
+	}
+	return nil
+}

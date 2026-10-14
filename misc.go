@@ -1,8 +1,11 @@
 package copyleaks
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
+	"sort"
 )
 
 // ReleaseNotes are the release notes of the Copyleaks API.
@@ -21,7 +24,8 @@ type ReleaseNote struct {
 	HTMLDescription string `json:"htmlDescription"`
 }
 
-// ReleaseNotes returns the release notes of the Copyleaks API. It needs no login.
+// ReleaseNotes returns the release notes of the Copyleaks API. It needs no login. Its
+// endpoint is not part of the API reference, so its content may change without notice.
 func (c *Client) ReleaseNotes(ctx context.Context) (*ReleaseNotes, error) {
 	var res ReleaseNotes
 	if err := c.do(ctx, apiRequest{method: http.MethodGet, path: "/v3/release-logs.json"}, &res); err != nil {
@@ -44,7 +48,7 @@ type SupportedFileTypes struct {
 // See https://docs.copyleaks.com/reference/actions/miscellaneous/supported-plagiarism-file-types.
 func (c *Client) SupportedFileTypes(ctx context.Context) (*SupportedFileTypes, error) {
 	var res SupportedFileTypes
-	if err := c.do(ctx, apiRequest{method: http.MethodGet, path: "/v3/miscellaneous/supported-file-types"}, &res); err != nil {
+	if err := c.do(ctx, apiRequest{method: http.MethodGet, path: "/v3/miscellaneous/supported-plagiarism-file-types"}, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -60,4 +64,86 @@ func (c *Client) OCRSupportedLanguages(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+// AllowedCrossLanguages lists the languages of cross-language Plagiarism Checker scans.
+// See Scanning.CrossLanguages.
+type AllowedCrossLanguages struct {
+	// DocumentLanguages are the languages that a scanned document can be in.
+	DocumentLanguages LanguageCodes `json:"documentLanguages"`
+	// ResultLanguages are the languages that the document can be compared against.
+	ResultLanguages LanguageCodes `json:"resultLanguages"`
+}
+
+// LanguageCodes maps language names, such as "english", to ISO 639-1 language codes,
+// such as "en".
+type LanguageCodes map[string]string
+
+// UnmarshalJSON decodes the object of language names and codes that the server sends.
+// It also accepts a list of codes, the shape that the API reference shows, and then
+// maps each code to itself.
+func (l *LanguageCodes) UnmarshalJSON(b []byte) error {
+	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '[' {
+		var codes []string
+		if err := json.Unmarshal(t, &codes); err != nil {
+			return err
+		}
+		m := make(LanguageCodes, len(codes))
+		for _, code := range codes {
+			m[code] = code
+		}
+		*l = m
+		return nil
+	}
+	var m map[string]string
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	*l = m
+	return nil
+}
+
+// Codes returns the language codes, sorted and without duplicates. Use them in
+// CrossLanguage.Code.
+func (l LanguageCodes) Codes() []string {
+	codes := make([]string, 0, len(l))
+	seen := make(map[string]bool, len(l))
+	for _, code := range l {
+		if !seen[code] {
+			seen[code] = true
+			codes = append(codes, code)
+		}
+	}
+	sort.Strings(codes)
+	return codes
+}
+
+// AllowedCrossLanguages returns the languages of cross-language Plagiarism Checker
+// scans. It needs no login.
+//
+// See https://docs.copyleaks.com/reference/actions/miscellaneous/supported-cross-languages.
+func (c *Client) AllowedCrossLanguages(ctx context.Context) (*AllowedCrossLanguages, error) {
+	var res AllowedCrossLanguages
+	if err := c.do(ctx, apiRequest{method: http.MethodGet, path: "/v3/miscellaneous/allowed-cross-languages"}, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// SupportedAITextFileTypes lists the file types that AI Text Detection can scan.
+type SupportedAITextFileTypes struct {
+	// FileTypes are the file extensions, such as "pdf" and "docx".
+	FileTypes []string `json:"supportedAiFileTypes"`
+}
+
+// SupportedAITextFileTypes returns the file types that AI Text Detection can scan. It
+// needs no login.
+//
+// See https://docs.copyleaks.com/reference/actions/miscellaneous/supported-ai-text-detection-file-types.
+func (c *Client) SupportedAITextFileTypes(ctx context.Context) (*SupportedAITextFileTypes, error) {
+	var res SupportedAITextFileTypes
+	if err := c.do(ctx, apiRequest{method: http.MethodGet, path: "/v3/miscellaneous/supported-ai-text-detection-file-types"}, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
 }

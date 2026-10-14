@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -41,16 +40,23 @@ func main() {
 	}
 
 	scanID := fmt.Sprintf("ai-image-%d", time.Now().Unix())
-	res, err := client.DetectAIImage(ctx, token, scanID, &copyleaks.AIImageDetectionRequest{
-		Base64:   base64.StdEncoding.EncodeToString(image),
-		Filename: filepath.Base(os.Args[1]),
-		Model:    copyleaks.AIImageModel1Ultra,
-		Sandbox:  true,
+	// DetectAIImageUpload sends the image as it is, as multipart/form-data. DetectAIImage
+	// sends the same request as base64 in JSON.
+	res, err := client.DetectAIImageUpload(ctx, token, scanID, &copyleaks.AIImageUploadRequest{
+		Image:           image,
+		Filename:        filepath.Base(os.Args[1]),
+		Model:           copyleaks.AIImageModel1Ultra,
+		Sandbox:         true,
+		MaskType:        copyleaks.AIImageMaskHeatmap,
+		ObjectDetection: []copyleaks.AIImageObject{{Object: "face"}},
 	})
 	if err != nil {
 		log.Fatalf("AI Image Detection: %v", err)
 	}
 	if res.Summary != nil {
 		fmt.Printf("AI detected: %v (human: %.0f%%, AI: %.0f%%)\n", res.IsAIDetected, res.Summary.Human*100, res.Summary.AI*100)
+	}
+	for _, object := range res.DetectedObjects {
+		fmt.Printf("found %q\n", object.Object)
 	}
 }

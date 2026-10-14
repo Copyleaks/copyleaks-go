@@ -1,5 +1,6 @@
 // Command webhooks is a server that receives the Copyleaks webhooks of Plagiarism Checker
-// scans and exports, and reads the AI Text Detection result of completed scans.
+// scans and exports, reads the AI Text Detection result of completed scans, and receives
+// the results of asynchronous AI Image and AI Video Detection.
 //
 // Submit scans with the status webhook https://<your-server>/webhook/{STATUS} and the
 // new-result webhook https://<your-server>/webhook/new-result. Copyleaks replaces
@@ -12,6 +13,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -21,20 +23,42 @@ import (
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /webhook/completed", completed)
-	mux.HandleFunc("POST /webhook/error", scanError)
-	mux.HandleFunc("POST /webhook/creditschecked", creditsChecked)
-	mux.HandleFunc("POST /webhook/indexed", indexed)
-	mux.HandleFunc("POST /webhook/new-result", newResult)
-	mux.HandleFunc("POST /export/completed", exportCompleted)
+	mux.HandleFunc("POST /webhook/completed", withBody(completed))
+	mux.HandleFunc("POST /webhook/error", withBody(scanError))
+	mux.HandleFunc("POST /webhook/creditschecked", withBody(creditsChecked))
+	mux.HandleFunc("POST /webhook/indexed", withBody(indexed))
+	mux.HandleFunc("POST /webhook/new-result", withBody(newResult))
+	mux.HandleFunc("POST /export/completed", withBody(exportCompleted))
+	mux.HandleFunc("POST /ai-image/result", withBody(aiImageResult))
+	mux.HandleFunc("POST /ai-video/result", withBody(aiVideoResult))
 
 	addr := ":8080"
 	log.Printf("listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
-func completed(w http.ResponseWriter, r *http.Request) {
-	hook, err := copyleaks.ParseCompletedWebhook(readBody(r))
+// maxBody is the largest webhook body that the server reads.
+const maxBody = 10 << 20
+
+// withBody reads the request body, up to maxBody, and passes it to h. It answers HTTP
+// 413 to a larger body.
+func withBody(h func(w http.ResponseWriter, body []byte)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+		var tooLarge *http.MaxBytesError
+		switch {
+		case errors.As(err, &tooLarge):
+			http.Error(w, "payload too large", http.StatusRequestEntityTooLarge)
+		case err != nil:
+			http.Error(w, "cannot read the body", http.StatusBadRequest)
+		default:
+			h(w, body)
+		}
+	}
+}
+
+func completed(w http.ResponseWriter, body []byte) {
+	hook, err := copyleaks.ParseCompletedWebhook(body)
 	if err != nil {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
@@ -55,8 +79,8 @@ func completed(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func scanError(w http.ResponseWriter, r *http.Request) {
-	hook, err := copyleaks.ParseErrorWebhook(readBody(r))
+func scanError(w http.ResponseWriter, body []byte) {
+	hook, err := copyleaks.ParseErrorWebhook(body)
 	if err != nil {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
@@ -67,8 +91,8 @@ func scanError(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func creditsChecked(w http.ResponseWriter, r *http.Request) {
-	hook, err := copyleaks.ParseCreditsCheckedWebhook(readBody(r))
+func creditsChecked(w http.ResponseWriter, body []byte) {
+	hook, err := copyleaks.ParseCreditsCheckedWebhook(body)
 	if err != nil {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
@@ -77,8 +101,8 @@ func creditsChecked(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func indexed(w http.ResponseWriter, r *http.Request) {
-	if _, err := copyleaks.ParseIndexedWebhook(readBody(r)); err != nil {
+func indexed(w http.ResponseWriter, body []byte) {
+	if _, err := copyleaks.ParseIndexedWebhook(body); err != nil {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
 	}
@@ -86,8 +110,8 @@ func indexed(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func newResult(w http.ResponseWriter, r *http.Request) {
-	hook, err := copyleaks.ParseNewResultWebhook(readBody(r))
+func newResult(w http.ResponseWriter, body []byte) {
+	hook, err := copyleaks.ParseNewResultWebhook(body)
 	if err != nil {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
@@ -98,8 +122,8 @@ func newResult(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func exportCompleted(w http.ResponseWriter, r *http.Request) {
-	hook, err := copyleaks.ParseExportCompletedWebhook(readBody(r))
+func exportCompleted(w http.ResponseWriter, body []byte) {
+	hook, err := copyleaks.ParseExportCompletedWebhook(body)
 	if err != nil {
 		http.Error(w, "bad payload", http.StatusBadRequest)
 		return
@@ -113,11 +137,30 @@ func exportCompleted(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// readBody reads up to 10 MB of the request body.
-func readBody(r *http.Request) []byte {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
+// aiImageResult receives the result of Client.SubmitAIImageAsync, submitted with the
+// webhook https://<your-server>/ai-image/result.
+func aiImageResult(w http.ResponseWriter, body []byte) {
+	res, err := copyleaks.ParseAIImageWebhook(body)
 	if err != nil {
-		return nil
+		http.Error(w, "bad payload", http.StatusBadRequest)
+		return
 	}
-	return body
+	if res.Summary != nil {
+		log.Printf("AI image: %.0f%% AI, detected: %v", res.Summary.AI*100, res.IsAIDetected)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// aiVideoResult receives the result of Client.SubmitAIVideo, submitted with the webhook
+// https://<your-server>/ai-video/result.
+func aiVideoResult(w http.ResponseWriter, body []byte) {
+	res, err := copyleaks.ParseAIVideoWebhook(body)
+	if err != nil {
+		http.Error(w, "bad payload", http.StatusBadRequest)
+		return
+	}
+	if res.Summary != nil {
+		log.Printf("AI video: %.0f%% AI, detected: %v", res.Summary.OverallAIRatio*100, res.IsAIDetected)
+	}
+	w.WriteHeader(http.StatusOK)
 }

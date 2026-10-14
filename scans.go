@@ -3,6 +3,7 @@ package copyleaks
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -10,18 +11,22 @@ import (
 
 // FileSubmission is the body of SubmitFile.
 type FileSubmission struct {
-	// Base64 is the content of the file, base64-encoded (required). To scan plain text,
-	// encode the text.
+	// Base64 is the content of the file, base64-encoded. Set either Base64 or Content.
+	// To scan plain text, encode the text.
 	Base64 string `json:"base64"`
 	// Filename is the name of the file with its extension, up to 255 characters (required).
 	Filename string `json:"filename"`
 	// Properties configures the scan (required).
 	Properties ScanProperties `json:"properties"`
+	// Content is the content of the file, as it is. Set either Content or Base64. The SDK
+	// encodes Content to base64 while it builds the request, which needs less memory
+	// than encoding it yourself into Base64: about 1.4 times the file size.
+	Content []byte `json:"-"`
 }
 
 // OCRSubmission is the body of SubmitOCR.
 type OCRSubmission struct {
-	// Base64 is the content of the image, base64-encoded (required).
+	// Base64 is the content of the image, base64-encoded. Set either Base64 or Content.
 	Base64 string `json:"base64"`
 	// Filename is the name of the image with its extension, up to 255 characters (required).
 	Filename string `json:"filename"`
@@ -30,6 +35,9 @@ type OCRSubmission struct {
 	LangCode string `json:"langCode"`
 	// Properties configures the scan (required).
 	Properties ScanProperties `json:"properties"`
+	// Content is the content of the image, as it is. Set either Content or Base64. The
+	// SDK encodes it to base64 while it builds the request, as FileSubmission.Content.
+	Content []byte `json:"-"`
 }
 
 // URLSubmission is the body of SubmitURL.
@@ -38,6 +46,13 @@ type URLSubmission struct {
 	URL string `json:"url"`
 	// Properties configures the scan (required).
 	Properties ScanProperties `json:"properties"`
+	// Verb is the HTTP method that Copyleaks uses to fetch URL: "GET" (the server
+	// default), "POST" or "PUT".
+	Verb string `json:"verb,omitempty"`
+	// Headers are the headers that Copyleaks sends to fetch URL, as [name, value] pairs.
+	// When set, Copyleaks sends no headers of its own. Use the Set-Cookie header for
+	// cookies.
+	Headers [][]string `json:"headers,omitempty"`
 }
 
 // SubmitFile starts a Plagiarism Checker scan of a file. The scan runs in the background:
@@ -52,8 +67,11 @@ func (c *Client) SubmitFile(ctx context.Context, token *AuthToken, scanID string
 	if err := validateSubmitScanID(scanID); err != nil {
 		return err
 	}
-	if req == nil || req.Base64 == "" || req.Filename == "" {
-		return invalid("Base64 and Filename are required")
+	if req == nil || req.Filename == "" {
+		return invalid("Filename and either Base64 or Content are required")
+	}
+	if err := checkUploadContent(req.Base64, req.Content); err != nil {
+		return err
 	}
 	if err := req.Properties.validate(); err != nil {
 		return err
@@ -61,11 +79,19 @@ func (c *Client) SubmitFile(ctx context.Context, token *AuthToken, scanID string
 	if err := VerifyAuthToken(token); err != nil {
 		return err
 	}
+	head := *req
+	head.Base64, head.Content = "", nil
+	body, err := base64Body(&head, req.Base64, req.Content)
+	if err != nil {
+		return fmt.Errorf("copyleaks: encode PUT /v3/scans/submit/file request: %w", err)
+	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPut,
-		path:   "/v3/scans/submit/file/" + segment(scanID),
-		token:  token,
-		body:   req,
+		method:      http.MethodPut,
+		path:        "/v3/scans/submit/file/" + segment(scanID),
+		token:       token,
+		rawBody:     body,
+		contentType: "application/json",
+		idempotent:  true,
 	}, nil)
 }
 
@@ -77,8 +103,11 @@ func (c *Client) SubmitOCR(ctx context.Context, token *AuthToken, scanID string,
 	if err := validateSubmitScanID(scanID); err != nil {
 		return err
 	}
-	if req == nil || req.Base64 == "" || req.Filename == "" || req.LangCode == "" {
-		return invalid("Base64, Filename and LangCode are required")
+	if req == nil || req.Filename == "" || req.LangCode == "" {
+		return invalid("Filename, LangCode and either Base64 or Content are required")
+	}
+	if err := checkUploadContent(req.Base64, req.Content); err != nil {
+		return err
 	}
 	if err := req.Properties.validate(); err != nil {
 		return err
@@ -86,11 +115,19 @@ func (c *Client) SubmitOCR(ctx context.Context, token *AuthToken, scanID string,
 	if err := VerifyAuthToken(token); err != nil {
 		return err
 	}
+	head := *req
+	head.Base64, head.Content = "", nil
+	body, err := base64Body(&head, req.Base64, req.Content)
+	if err != nil {
+		return fmt.Errorf("copyleaks: encode PUT /v3/scans/submit/ocr request: %w", err)
+	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPut,
-		path:   "/v3/scans/submit/ocr/" + segment(scanID),
-		token:  token,
-		body:   req,
+		method:      http.MethodPut,
+		path:        "/v3/scans/submit/ocr/" + segment(scanID),
+		token:       token,
+		rawBody:     body,
+		contentType: "application/json",
+		idempotent:  true,
 	}, nil)
 }
 
@@ -104,6 +141,9 @@ func (c *Client) SubmitURL(ctx context.Context, token *AuthToken, scanID string,
 	if req == nil || req.URL == "" {
 		return invalid("URL is required")
 	}
+	if err := validateVerb(req.Verb); err != nil {
+		return err
+	}
 	if err := req.Properties.validate(); err != nil {
 		return err
 	}
@@ -111,10 +151,11 @@ func (c *Client) SubmitURL(ctx context.Context, token *AuthToken, scanID string,
 		return err
 	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPut,
-		path:   "/v3/scans/submit/url/" + segment(scanID),
-		token:  token,
-		body:   req,
+		method:     http.MethodPut,
+		path:       "/v3/scans/submit/url/" + segment(scanID),
+		token:      token,
+		body:       req,
+		idempotent: true,
 	}, nil)
 }
 
@@ -124,17 +165,32 @@ type ExportRequest struct {
 	// CompletionWebhook is called when the export is done (required); see
 	// ParseExportCompletedWebhook.
 	CompletionWebhook string `json:"completionWebhook"`
+	// CompletionWebhookHeaders are extra headers of the CompletionWebhook request, as
+	// [name, value] pairs.
+	CompletionWebhookHeaders [][]string `json:"completionWebhookHeaders,omitempty"`
 	// MaxRetries is how many times each upload is retried, from 1 to 12. The server
 	// default is 3.
 	MaxRetries int `json:"maxRetries,omitempty"`
 	// DeveloperPayload is sent back in the export-completed webhook.
 	DeveloperPayload string `json:"developerPayload,omitempty"`
-	// Results are the results to export, by result ID from the completed webhook.
+	// Results are the results to export, by result ID from the completed webhook; see
+	// ParseExportedResult.
 	Results []ExportResult `json:"results,omitempty"`
 	// PDFReport exports the PDF report. It requires ScanProperties.PDF.Create on submit.
 	PDFReport *ExportTarget `json:"pdfReport,omitempty"`
-	// CrawledVersion exports the crawled version of the submitted content.
+	// CrawledVersion exports the crawled version of the submitted content; see
+	// ParseExportedCrawledVersion.
 	CrawledVersion *ExportTarget `json:"crawledVersion,omitempty"`
+	// AIDetection exports the AI Text Detection report, with AI Logic when it was on. It
+	// requires ScanProperties.AIGeneratedText.Detect on submit; see
+	// ParseExportedAIDetection.
+	AIDetection *ExportTarget `json:"aiDetection,omitempty"`
+	// WritingFeedback exports the Grammar Checker report. It requires
+	// ScanProperties.WritingFeedback.Enable on submit; see ParseExportedWritingFeedback.
+	WritingFeedback *ExportTarget `json:"writingFeedback,omitempty"`
+	// Overview exports the Gen-AI Overview. It requires ScanProperties.Overview.Enable on
+	// submit; see ParseExportedOverview.
+	Overview *ExportTarget `json:"overview,omitempty"`
 }
 
 // ExportResult uploads one result of a scan.
@@ -179,10 +235,11 @@ func (c *Client) Export(ctx context.Context, token *AuthToken, scanID, exportID 
 		return err
 	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPost,
-		path:   "/v3/downloads/" + segment(scanID) + "/export/" + segment(exportID),
-		token:  token,
-		body:   req,
+		method:     http.MethodPost,
+		path:       "/v3/downloads/" + segment(scanID) + "/export/" + segment(exportID),
+		token:      token,
+		body:       req,
+		idempotent: true,
 	}, nil)
 }
 
@@ -199,9 +256,9 @@ func (r *ExportRequest) validate() error {
 			return invalid("each of Results needs ID, Endpoint and Verb")
 		}
 	}
-	for _, t := range []*ExportTarget{r.PDFReport, r.CrawledVersion} {
+	for _, t := range []*ExportTarget{r.PDFReport, r.CrawledVersion, r.AIDetection, r.WritingFeedback, r.Overview} {
 		if t != nil && (t.Endpoint == "" || t.Verb == "") {
-			return invalid("PDFReport and CrawledVersion need Endpoint and Verb")
+			return invalid("PDFReport, CrawledVersion, AIDetection, WritingFeedback and Overview need Endpoint and Verb")
 		}
 	}
 	return nil

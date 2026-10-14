@@ -11,7 +11,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -30,7 +29,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	client, err := copyleaks.NewClient()
+	// Retry rate-limited and failed submits; a retried submit never starts a second scan.
+	client, err := copyleaks.NewClient(copyleaks.WithRetry(copyleaks.RetryPolicy{MaxAttempts: 3}))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func main() {
 
 	scanID := fmt.Sprintf("plagiarism-%d", time.Now().Unix())
 	err = client.SubmitFile(ctx, token, scanID, &copyleaks.FileSubmission{
-		Base64:   base64.StdEncoding.EncodeToString([]byte("Hello world, this is a test.")),
+		Content:  []byte("Hello world, this is a test."),
 		Filename: "test.txt",
 		Properties: copyleaks.ScanProperties{
 			Webhooks:        copyleaks.SubmitWebhooks{Status: webhook},

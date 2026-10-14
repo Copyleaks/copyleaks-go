@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -14,10 +15,11 @@ var (
 	// key was rejected. Check for it with errors.Is(err, ErrUnauthorized).
 	ErrUnauthorized = errors.New("copyleaks: unauthorized")
 	// ErrRateLimited matches an *APIError with HTTP status 429: too many requests were sent.
-	// Wait before calling again.
+	// Wait before calling again; APIError.RetryAfter tells how long when the server says.
 	ErrRateLimited = errors.New("copyleaks: rate limited")
 	// ErrUnderMaintenance matches an *APIError with HTTP status 503: the Copyleaks servers
-	// are unavailable for maintenance. Retry later with exponential backoff.
+	// are unavailable for maintenance. Retry later with exponential backoff, or turn on
+	// WithRetry.
 	ErrUnderMaintenance = errors.New("copyleaks: under maintenance")
 	// ErrTokenExpired is returned, before any request is sent, when the AuthToken passed to
 	// a call has expired or expires within five minutes. Call Login again.
@@ -48,6 +50,10 @@ type APIError struct {
 	Endpoint string
 	// Body is the response body, up to 1 MiB. The server usually explains the error here.
 	Body []byte
+	// RetryAfter is how long the server asked to wait before calling again, from the
+	// Retry-After header of the response, or 0 when the response has none. It is mostly
+	// set on HTTP 429 and 503 responses.
+	RetryAfter time.Duration
 }
 
 // Error returns the method, endpoint and status of the failed request, and the start of

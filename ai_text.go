@@ -79,8 +79,11 @@ func (r *AITextDetectionResponse) UnmarshalJSON(b []byte) error {
 type AITextDetectionResult struct {
 	// Classification is 1 for human-written text and 2 for AI-generated text.
 	Classification int `json:"classification"`
-	// Probability is the confidence of the classification. Deprecated by the server; it
-	// may be missing.
+	// Probability is the confidence of the classification. It is 0 when the server leaves
+	// it out.
+	//
+	// Deprecated: The API reference deprecates probability and plans to remove it. Use
+	// Classification and AITextDetectionResponse.Summary.
 	Probability float64 `json:"probability"`
 	// Matches are the locations of the section in the text.
 	Matches []AITextDetectionMatch `json:"matches"`
@@ -192,6 +195,31 @@ func (c *Client) DetectAIText(ctx context.Context, token *AuthToken, scanID stri
 		path:   "/v2/writer-detector/" + segment(scanID) + "/check",
 		token:  token,
 		body:   req,
+	}, &res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// AITextCreditsBalance is the AI Text Detection credit balance of an account.
+type AITextCreditsBalance struct {
+	// Credits is the number of remaining credits.
+	Credits int `json:"credits"`
+}
+
+// AITextCreditsBalance returns the AI Text Detection credit balance of the account.
+//
+// See https://docs.copyleaks.com/reference/actions/writer-detector/credits.
+func (c *Client) AITextCreditsBalance(ctx context.Context, token *AuthToken) (*AITextCreditsBalance, error) {
+	if err := VerifyAuthToken(token); err != nil {
+		return nil, err
+	}
+	var res AITextCreditsBalance
+	err := c.do(ctx, apiRequest{
+		method: http.MethodGet,
+		path:   "/v2/writer-detector/credits",
+		token:  token,
 	}, &res)
 	if err != nil {
 		return nil, err

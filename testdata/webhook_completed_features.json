@@ -1,0 +1,100 @@
+{
+  "status": 0,
+  "developerPayload": "",
+  "scannedDocument": {
+    "scanId": "scan-id32",
+    "totalWords": 2,
+    "totalExcluded": 0,
+    "credits": 0,
+    "expectedCredits": 1,
+    "creationTime": "2025-08-05T07:19:08.181236Z",
+    "metadata": {
+      "filename": "file.txt"
+    },
+    "enabled": {
+      "plagiarismDetection": true,
+      "aiDetection": false,
+      "explainableAi": false,
+      "writingFeedback": true,
+      "pdfReport": true,
+      "cheatDetection": false,
+      "overview": true,
+      "referencesValidation": true,
+      "aiSourceMatch": false,
+      "internalAiSourceMatch": true
+    },
+    "detectedLanguage": "en"
+  },
+  "results": {
+    "score": {
+      "identicalWords": 1,
+      "minorChangedWords": 0,
+      "relatedMeaningWords": 0,
+      "aggregatedScore": 50.0
+    },
+    "internet": [],
+    "database": [],
+    "batch": [],
+    "repositories": [],
+    "internalAIData": [
+      {
+        "id": "a1b2c3",
+        "title": "AI essay",
+        "introduction": "Sample excerpt",
+        "matchedWords": 40,
+        "identicalWords": 30,
+        "similarWords": 6,
+        "paraphrasedWords": 4,
+        "totalWords": 120,
+        "tags": [
+          {
+            "code": "internal-ai-source-match",
+            "title": "AI-Generated",
+            "description": "This result contains AI-generated text"
+          }
+        ]
+      }
+    ]
+  },
+  "referencesValidation": {
+    "summary": {
+      "total": 5,
+      "academic": 3,
+      "academicValidated": 2,
+      "nonAcademicValidated": 1
+    }
+  },
+  "writingFeedback": {
+    "textStatistics": {
+      "sentenceCount": 5,
+      "averageWordLength": 4.7,
+      "averageSentenceLength": 12.8,
+      "readingTimeSeconds": 21.0,
+      "speakingTimeSeconds": 29.5
+    },
+    "score": {
+      "grammarCorrectionsCount": 1,
+      "grammarCorrectionsScore": 93,
+      "grammarScoreWeight": 1.0,
+      "mechanicsCorrectionsCount": 1,
+      "mechanicsCorrectionsScore": 93,
+      "mechanicsScoreWeight": 1.0,
+      "sentenceStructureCorrectionsCount": 1,
+      "sentenceStructureCorrectionsScore": 93,
+      "sentenceStructureScoreWeight": 1.0,
+      "wordChoiceCorrectionsCount": 0,
+      "wordChoiceCorrectionsScore": 100,
+      "wordChoiceScoreWeight": 1.0,
+      "overallScore": 94
+    },
+    "readability": {
+      "score": 95,
+      "readabilityLevel": 1,
+      "readabilityLevelText": "5th Grader",
+      "readabilityLevelDescription": "Very easy to read"
+    }
+  },
+  "notifications": {
+    "alerts": []
+  }
+}

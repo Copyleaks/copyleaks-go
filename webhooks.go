@@ -3,6 +3,7 @@ package copyleaks
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -27,6 +28,49 @@ type CompletedWebhook struct {
 	Results *Results `json:"results"`
 	// Notifications are the scan alerts.
 	Notifications *Notifications `json:"notifications"`
+	// ReferencesValidation is the summary of the Citation Checker, for a scan submitted
+	// with ScanProperties.References.Validate. The validation of each reference is in
+	// the crawled version; see ExportedCrawledVersion.ReferencesValidation.
+	ReferencesValidation *ReferencesValidation `json:"referencesValidation"`
+	// WritingFeedback is the summary of the Grammar Checker, for a scan submitted with
+	// ScanProperties.WritingFeedback. Export the full report with
+	// ExportRequest.WritingFeedback.
+	WritingFeedback *WebhookWritingFeedback `json:"writingFeedback"`
+}
+
+// WebhookWritingFeedback is the Grammar Checker summary of a completed scan.
+type WebhookWritingFeedback struct {
+	// TextStatistics are statistics of the text.
+	TextStatistics *GrammarStatistics `json:"textStatistics"`
+	// Score holds the correction counts and scores of each category, and the overall
+	// score.
+	Score *GrammarScoreCorrections `json:"score"`
+	// Readability is the readability of the text.
+	Readability *GrammarReadability `json:"readability"`
+}
+
+// ReferencesValidation is the result of the Citation Checker.
+type ReferencesValidation struct {
+	// Summary counts the references that were found and validated.
+	Summary *ReferencesValidationSummary `json:"summary"`
+	// Results are the references, one per reference found. Only the crawled version
+	// has them; the completed webhook only has the summary.
+	Results []ReferenceValidation `json:"results,omitempty"`
+}
+
+// ReferencesValidationSummary counts the references that the Citation Checker found and
+// validated.
+type ReferencesValidationSummary struct {
+	// Total is the number of references found.
+	Total int `json:"total"`
+	// Academic is the number of references found to be academic.
+	Academic int `json:"academic"`
+	// AcademicValidated is the number of academic references that were fully
+	// corroborated.
+	AcademicValidated int `json:"academicValidated"`
+	// NonAcademicValidated is the number of other references that were fully
+	// corroborated by their cited source.
+	NonAcademicValidated int `json:"nonAcademicValidated"`
 }
 
 // ErrorWebhook is the payload of the error webhook, sent when a scan ends with an error.
@@ -108,6 +152,9 @@ type NewResultWebhook struct {
 	Batch []DatabaseResult `json:"batch"`
 	// Repositories are the new results from Private Cloud Hubs.
 	Repositories []RepositoryResult `json:"repositories"`
+	// InternalAIData are the new results from the Copyleaks internal AI database; see
+	// ScanProperties.InternalAISourceMatch.
+	InternalAIData []InternalAIResult `json:"internalAIData"`
 }
 
 // ExportCompletedWebhook is the payload of the webhook that Copyleaks sends to
@@ -148,6 +195,37 @@ type WebhookScannedDocument struct {
 	CreationTime string `json:"creationTime"`
 	// Metadata is metadata of the scanned document.
 	Metadata *ResultMetadata `json:"metadata"`
+	// ExpectedCredits is the number of credits that the scan was expected to use.
+	ExpectedCredits int `json:"expectedCredits"`
+	// DetectedLanguage is the language code of the document, such as "en", when the
+	// server reports it.
+	DetectedLanguage string `json:"detectedLanguage"`
+	// Enabled reports the features that the scan ran, when the server reports them.
+	Enabled *ScanEnabledFeatures `json:"enabled"`
+}
+
+// ScanEnabledFeatures reports the features that a scan ran.
+type ScanEnabledFeatures struct {
+	// PlagiarismDetection reports the Plagiarism Checker.
+	PlagiarismDetection bool `json:"plagiarismDetection"`
+	// AIDetection reports AI Text Detection.
+	AIDetection bool `json:"aiDetection"`
+	// ExplainableAI reports AI Logic.
+	ExplainableAI bool `json:"explainableAi"`
+	// WritingFeedback reports the Grammar Checker.
+	WritingFeedback bool `json:"writingFeedback"`
+	// PDFReport reports the PDF report.
+	PDFReport bool `json:"pdfReport"`
+	// CheatDetection reports cheat detection.
+	CheatDetection bool `json:"cheatDetection"`
+	// Overview reports the Gen-AI Overview.
+	Overview bool `json:"overview"`
+	// ReferencesValidation reports the Citation Checker.
+	ReferencesValidation bool `json:"referencesValidation"`
+	// AISourceMatch reports AI Source Match.
+	AISourceMatch bool `json:"aiSourceMatch"`
+	// InternalAISourceMatch reports Internal AI Source Match.
+	InternalAISourceMatch bool `json:"internalAiSourceMatch"`
 }
 
 // Results are the results of a scan, by source.
@@ -162,6 +240,31 @@ type Results struct {
 	Repositories []RepositoryResult `json:"repositories"`
 	// Score is the aggregated score of all results.
 	Score *ResultsScore `json:"score"`
+	// InternalAIData are the results from the Copyleaks internal AI database, for a scan
+	// submitted with ScanProperties.InternalAISourceMatch.
+	InternalAIData []InternalAIResult `json:"internalAIData"`
+}
+
+// InternalAIResult is a result found in the Copyleaks internal AI database.
+type InternalAIResult struct {
+	// ID is the result ID.
+	ID string `json:"id"`
+	// Title is the title of the matching entry.
+	Title string `json:"title"`
+	// Introduction is an excerpt of the matching content.
+	Introduction string `json:"introduction"`
+	// MatchedWords is the number of words that match the scanned document.
+	MatchedWords int `json:"matchedWords"`
+	// IdenticalWords is the number of identical words.
+	IdenticalWords int `json:"identicalWords"`
+	// SimilarWords is the number of similar, but not identical, words.
+	SimilarWords int `json:"similarWords"`
+	// ParaphrasedWords is the number of paraphrased words.
+	ParaphrasedWords int `json:"paraphrasedWords"`
+	// TotalWords is the number of words in the matching entry.
+	TotalWords int `json:"totalWords"`
+	// Tags are the tags of the result.
+	Tags []ResultTag `json:"tags"`
 }
 
 // InternetResult is a result found on the internet.
@@ -347,11 +450,12 @@ func (a *Alert) AIDetectionResult() (*AITextDetectionResponse, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
-	var probe any
-	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf("copyleaks: decode suspected-ai-text additionalData: %w", err)
-	}
-	if _, ok := probe.(map[string]any); !ok {
+	// Only an object holds a result. Look at its first character instead of decoding it
+	// twice, as the result can be large.
+	if t := bytes.TrimLeft(data, " \t\r\n"); len(t) == 0 || t[0] != '{' {
+		if !json.Valid(data) {
+			return nil, fmt.Errorf("copyleaks: decode suspected-ai-text additionalData: %w", invalidJSON(data))
+		}
 		return nil, nil
 	}
 	var res AITextDetectionResponse
@@ -389,6 +493,16 @@ func ParseNewResultWebhook(body []byte) (*NewResultWebhook, error) {
 // ParseExportCompletedWebhook decodes the body of an export-completed webhook.
 func ParseExportCompletedWebhook(body []byte) (*ExportCompletedWebhook, error) {
 	return parseWebhook[ExportCompletedWebhook]("export-completed", body)
+}
+
+// invalidJSON returns the error that encoding/json reports for data, which is not valid
+// JSON.
+func invalidJSON(data []byte) error {
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	return errors.New("invalid JSON")
 }
 
 // parseWebhook decodes a webhook body of the given kind.

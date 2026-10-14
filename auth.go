@@ -108,10 +108,11 @@ func (c *Client) Login(ctx context.Context, email, key string) (*AuthToken, erro
 	}
 	var token AuthToken
 	err := c.do(ctx, apiRequest{
-		method:   http.MethodPost,
-		path:     "/v3/account/login/api",
-		identity: true,
-		body:     loginRequest{Email: email, Key: key},
+		method:     http.MethodPost,
+		path:       "/v3/account/login/api",
+		identity:   true,
+		body:       loginRequest{Email: email, Key: key},
+		idempotent: true,
 	}, &token)
 	if err != nil {
 		return nil, err
