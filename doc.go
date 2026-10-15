@@ -1,11 +1,8 @@
 // Package copyleaks is the official Go client for the Copyleaks API.
 //
-// It covers AI Text Detection, AI Image Detection, Plagiarism Checker, Grammar Checker
-// and Text Moderation, plus the account, scan management and miscellaneous endpoints,
-// and the webhook payloads that Copyleaks sends to your server.
-//
-// Create a Client once and reuse it. Log in to get an AuthToken, then pass the token to
-// every authenticated call. Every method takes a context.Context first:
+// It covers AI Text, Image and Video Detection, Plagiarism Checker, Image Plagiarism Detector, Grammar Checker,
+// Text Moderation, account and scan management, and parsers for webhooks and exported files.
+// Create one Client, log in, and pass the AuthToken to each call:
 //
 //	client, err := copyleaks.NewClient()
 //	if err != nil {
@@ -15,16 +12,8 @@
 //	if err != nil {
 //		return err
 //	}
-//	res, err := client.DetectAIText(ctx, token, "my-scan-1", &copyleaks.AITextDetectionRequest{
-//		Text:    text,
-//		Sandbox: true,
-//	})
-//
-// Requests that the API rejects return an *APIError. Use errors.Is with ErrUnauthorized,
-// ErrRateLimited or ErrUnderMaintenance to check for those cases. Arguments that fail the
-// client-side checks return an error that matches ErrInvalidArgument, before any request
-// is sent. The package never retries, never panics on bad input and never writes to
-// standard output or standard error.
+//	res, err := client.DetectAIText(ctx, token, "my-scan-1",
+//		&copyleaks.AITextDetectionRequest{Text: text, Sandbox: true})
 //
 // API reference: https://docs.copyleaks.com
 package copyleaks

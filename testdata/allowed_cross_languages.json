@@ -1,0 +1,13 @@
+{
+  "documentLanguages": {
+    "danish": "da",
+    "english": "en",
+    "spanish": "es"
+  },
+  "resultLanguages": {
+    "albanian": "sq",
+    "bulgarian": "bg",
+    "english": "en",
+    "vietnamese": "vi"
+  }
+}

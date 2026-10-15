@@ -1,7 +1,4 @@
-// Command grammar-checker checks a text with the Grammar Checker, in sandbox mode, and
-// prints the suggested corrections.
-//
-// Usage:
+// Command grammar-checker checks a text with the Grammar Checker, in sandbox mode, and prints the corrections.
 //
 //	export COPYLEAKS_EMAIL=you@example.com COPYLEAKS_API_KEY=your-api-key
 //	go run ./examples/grammar-checker

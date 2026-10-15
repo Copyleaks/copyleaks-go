@@ -1,0 +1,46 @@
+{
+  "developerPayload": "my-custom-data",
+  "scannedImage": {
+    "scanId": "my-scan-1",
+    "expectedCredits": 1,
+    "actualCredits": 1,
+    "creationTime": "2026-05-24T10:00:00Z",
+    "width": 1920,
+    "height": 1080,
+    "filename": "my-photo.jpg"
+  },
+  "matches": {
+    "internet": [
+      {
+        "url": "https://example.com/images/photo.jpg",
+        "matchType": 0,
+        "webPages": [
+          {
+            "url": "https://example.com/blog/my-post"
+          },
+          {
+            "url": "https://example.org/news/article"
+          }
+        ]
+      },
+      {
+        "url": "https://example.com/thumbs/photo-thumb.jpg",
+        "matchType": 1,
+        "webPages": [
+          {
+            "url": "https://example.org/gallery"
+          }
+        ]
+      },
+      {
+        "url": "https://example.org/gallery/photo-sm.jpg",
+        "matchType": 1
+      }
+    ],
+    "score": {
+      "totalMatches": 3,
+      "fullMatches": 1,
+      "partialMatches": 2
+    }
+  }
+}

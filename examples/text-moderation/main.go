@@ -1,7 +1,4 @@
-// Command text-moderation checks a text with Text Moderation for every supported label,
-// in sandbox mode, and prints the flagged segments.
-//
-// Usage:
+// Command text-moderation checks a text for every Text Moderation label, in sandbox mode.
 //
 //	export COPYLEAKS_EMAIL=you@example.com COPYLEAKS_API_KEY=your-api-key
 //	go run ./examples/text-moderation

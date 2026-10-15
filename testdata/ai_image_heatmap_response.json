@@ -1,0 +1,66 @@
+{
+  "model": "ai-image-1-ultra",
+  "result": {
+    "starts": [
+      0,
+      512,
+      1536,
+      2560
+    ],
+    "lengths": [
+      256,
+      512,
+      768,
+      1024
+    ],
+    "labels": [
+      1,
+      2,
+      4,
+      3
+    ]
+  },
+  "summary": {
+    "human": 0.3,
+    "ai": 0.7
+  },
+  "isAiDetected": true,
+  "imageInfo": {
+    "shape": {
+      "height": 1024,
+      "width": 768
+    }
+  },
+  "detectedObjects": [
+    {
+      "object": "face",
+      "mask": {
+        "starts": [
+          1024,
+          3072
+        ],
+        "lengths": [
+          512,
+          256
+        ]
+      }
+    },
+    {
+      "object": "hand",
+      "mask": {
+        "starts": [
+          8192
+        ],
+        "lengths": [
+          128
+        ]
+      }
+    }
+  ],
+  "scannedDocument": {
+    "scanId": "my-scan-123",
+    "actualCredits": 1,
+    "expectedCredits": 1,
+    "creationTime": "2023-01-10T10:07:58.9459512Z"
+  }
+}

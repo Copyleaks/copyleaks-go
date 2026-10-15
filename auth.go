@@ -9,16 +9,11 @@ import (
 	"time"
 )
 
-// tokenExpiryMargin is how long before its expiry a token is treated as expired, so that
-// it does not expire while a request is in flight.
+// tokenExpiryMargin treats a token as expired this early, so it does not expire mid-request.
 const tokenExpiryMargin = 5 * time.Minute
 
-// AuthToken is the login token returned by Login. Pass it to every authenticated call.
-//
-// A token is valid for 48 hours and can be reused for many calls; check it with
-// VerifyAuthToken and log in again when it expires. Treat it like a password. It can be
-// stored with encoding/json and read back; the JSON holds the access token. Printing it
-// with the fmt package, with any verb, redacts the access token.
+// AuthToken is the login token returned by Login. It is valid for 48 hours; reuse it until it expires.
+// Treat it like a password: fmt prints it redacted, but its JSON (for storing it) holds the access token.
 type AuthToken struct {
 	// AccessToken is the bearer token sent in the Authorization header.
 	AccessToken string `json:"access_token"`
@@ -28,8 +23,7 @@ type AuthToken struct {
 	Expires time.Time `json:".expires"`
 }
 
-// UnmarshalJSON decodes a login response or a stored token. Times without a UTC offset
-// are read as UTC.
+// UnmarshalJSON decodes a login response or a stored token; times without a UTC offset are UTC.
 func (t *AuthToken) UnmarshalJSON(b []byte) error {
 	var raw struct {
 		AccessToken string `json:"access_token"`
@@ -57,14 +51,12 @@ func (t AuthToken) String() string {
 		t.Issued.Format(time.RFC3339), t.Expires.Format(time.RFC3339))
 }
 
-// Format implements fmt.Formatter, so that every fmt verb and flag, such as %v, %+v,
-// %#v, %s, %q, %x and %d, prints the redacted String form and never the access token.
+// Format implements fmt.Formatter: every verb and flag prints the redacted String form.
 func (t AuthToken) Format(f fmt.State, verb rune) {
 	_, _ = io.WriteString(f, t.String())
 }
 
-// parseTokenTime parses an RFC 3339 time, or one without a UTC offset as UTC.
-// An empty string gives the zero time.
+// parseTokenTime parses RFC 3339, or a time without a UTC offset as UTC; "" gives the zero time.
 func parseTokenTime(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
@@ -75,12 +67,8 @@ func parseTokenTime(s string) (time.Time, error) {
 	return time.Parse("2006-01-02T15:04:05.999999999", s)
 }
 
-// VerifyAuthToken checks a token without calling the API. It returns nil when the token
-// has an access token and does not expire within the next five minutes. It returns an
-// error that matches ErrTokenExpired when the token expired or is about to, and one that
-// matches ErrInvalidArgument when the token is nil or empty.
-//
-// Every authenticated method runs this check before sending its request.
+// VerifyAuthToken checks a token locally: ErrInvalidArgument when it is nil or empty, ErrTokenExpired when it
+// expired or expires within five minutes. Every authenticated method runs it first.
 func VerifyAuthToken(token *AuthToken) error {
 	if token == nil || token.AccessToken == "" {
 		return invalid("auth token is missing; call Login first")
@@ -97,21 +85,19 @@ type loginRequest struct {
 	Key   string `json:"key"`
 }
 
-// Login exchanges the email and the API key of a Copyleaks account for an AuthToken.
-// The identity server allows 12 logins per account in 15 minutes, so reuse the token
-// until it expires.
-//
-// See https://docs.copyleaks.com/reference/actions/account/login.
+// Login exchanges an account email and API key for an AuthToken. Only 12 logins per account are allowed in
+// 15 minutes, so reuse the token. See https://docs.copyleaks.com/reference/actions/account/login.
 func (c *Client) Login(ctx context.Context, email, key string) (*AuthToken, error) {
 	if email == "" || key == "" {
 		return nil, invalid("email and key are required")
 	}
 	var token AuthToken
 	err := c.do(ctx, apiRequest{
-		method:   http.MethodPost,
-		path:     "/v3/account/login/api",
-		identity: true,
-		body:     loginRequest{Email: email, Key: key},
+		method:     http.MethodPost,
+		path:       "/v3/account/login/api",
+		identity:   true,
+		body:       loginRequest{Email: email, Key: key},
+		idempotent: true,
 	}, &token)
 	if err != nil {
 		return nil, err

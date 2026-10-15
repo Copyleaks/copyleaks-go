@@ -576,7 +576,7 @@ func TestDisplayLanguageValidation(t *testing.T) {
 }
 
 func TestPDFReportVersionValidation(t *testing.T) {
-	// The server allows exactly v1, v2, v3 and latest (AllowedValues, case-sensitive).
+	// The server allows exactly v1, v2, v3 and latest, case-sensitive.
 	cases := map[string]bool{
 		"": true, "v1": true, "v2": true, "v3": true, "latest": true,
 		"V1": false, "Latest": false, "LATEST": false, "v0": false, "v4": false, "3": false, "v3 ": false,

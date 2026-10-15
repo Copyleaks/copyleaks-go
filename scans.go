@@ -3,33 +3,39 @@ package copyleaks
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // FileSubmission is the body of SubmitFile.
 type FileSubmission struct {
-	// Base64 is the content of the file, base64-encoded (required). To scan plain text,
-	// encode the text.
+	// Base64 is the file, base64-encoded; set it or Content. To scan plain text, encode the text.
 	Base64 string `json:"base64"`
 	// Filename is the name of the file with its extension, up to 255 characters (required).
 	Filename string `json:"filename"`
 	// Properties configures the scan (required).
 	Properties ScanProperties `json:"properties"`
+	// Content is the raw file; set it or Base64. The SDK encodes it while building the request, which needs less
+	// memory (about 1.4 times the file size) than encoding it into Base64 yourself.
+	Content []byte `json:"-"`
 }
 
 // OCRSubmission is the body of SubmitOCR.
 type OCRSubmission struct {
-	// Base64 is the content of the image, base64-encoded (required).
+	// Base64 is the image, base64-encoded; set it or Content.
 	Base64 string `json:"base64"`
 	// Filename is the name of the image with its extension, up to 255 characters (required).
 	Filename string `json:"filename"`
-	// LangCode is the language of the text in the image (required). See
-	// Client.OCRSupportedLanguages.
+	// LangCode is the language of the text in the image (required); see Client.OCRSupportedLanguages.
 	LangCode string `json:"langCode"`
 	// Properties configures the scan (required).
 	Properties ScanProperties `json:"properties"`
+	// Content is the raw image; set it or Base64. See FileSubmission.Content.
+	Content []byte `json:"-"`
 }
 
 // URLSubmission is the body of SubmitURL.
@@ -38,22 +44,26 @@ type URLSubmission struct {
 	URL string `json:"url"`
 	// Properties configures the scan (required).
 	Properties ScanProperties `json:"properties"`
+	// Verb is the HTTP method used to fetch URL: "GET" (default), "POST" or "PUT".
+	Verb string `json:"verb,omitempty"`
+	// Headers are the headers sent to fetch URL, as [name, value] pairs, replacing Copyleaks' own.
+	// Use Set-Cookie for cookies.
+	Headers [][]string `json:"headers,omitempty"`
 }
 
-// SubmitFile starts a Plagiarism Checker scan of a file. The scan runs in the background:
-// Copyleaks reports its status and results to Properties.Webhooks.Status (see
-// ParseCompletedWebhook).
-//
-// The scan ID must be 3 to 36 characters from [a-z0-9!@$&=_()';:.,~-] and must not
-// contain g, then o or 0, then gle (as in google).
-//
+// SubmitFile starts a Plagiarism Checker scan of a file. It runs in the background and reports to
+// Properties.Webhooks.Status (see ParseCompletedWebhook). The scan ID must be 3 to 36 characters from
+// [a-z0-9!@$&=_()';:.,~-] and must not contain g, then o or 0, then gle (as in google).
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-file.
 func (c *Client) SubmitFile(ctx context.Context, token *AuthToken, scanID string, req *FileSubmission) error {
-	if err := validateSubmitScanID(scanID); err != nil {
-		return err
+	if err := validate.SubmitScanID(scanID); err != nil {
+		return invalid(err.Error())
 	}
-	if req == nil || req.Base64 == "" || req.Filename == "" {
-		return invalid("Base64 and Filename are required")
+	if req == nil || req.Filename == "" {
+		return invalid("Filename and either Base64 or Content are required")
+	}
+	if err := validate.UploadContent(req.Base64, req.Content); err != nil {
+		return invalid(err.Error())
 	}
 	if err := req.Properties.validate(); err != nil {
 		return err
@@ -61,24 +71,33 @@ func (c *Client) SubmitFile(ctx context.Context, token *AuthToken, scanID string
 	if err := VerifyAuthToken(token); err != nil {
 		return err
 	}
+	head := *req
+	head.Base64, head.Content = "", nil
+	body, err := base64Body(&head, req.Base64, req.Content)
+	if err != nil {
+		return fmt.Errorf("copyleaks: encode PUT /v3/scans/submit/file request: %w", err)
+	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPut,
-		path:   "/v3/scans/submit/file/" + segment(scanID),
-		token:  token,
-		body:   req,
+		method:      http.MethodPut,
+		path:        "/v3/scans/submit/file/" + segment(scanID),
+		token:       token,
+		rawBody:     body,
+		contentType: "application/json",
+		idempotent:  true,
 	}, nil)
 }
 
-// SubmitOCR starts a Plagiarism Checker scan of the text in an image. It works like
-// SubmitFile.
-//
+// SubmitOCR starts a Plagiarism Checker scan of the text in an image, like SubmitFile.
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-ocr.
 func (c *Client) SubmitOCR(ctx context.Context, token *AuthToken, scanID string, req *OCRSubmission) error {
-	if err := validateSubmitScanID(scanID); err != nil {
-		return err
+	if err := validate.SubmitScanID(scanID); err != nil {
+		return invalid(err.Error())
 	}
-	if req == nil || req.Base64 == "" || req.Filename == "" || req.LangCode == "" {
-		return invalid("Base64, Filename and LangCode are required")
+	if req == nil || req.Filename == "" || req.LangCode == "" {
+		return invalid("Filename, LangCode and either Base64 or Content are required")
+	}
+	if err := validate.UploadContent(req.Base64, req.Content); err != nil {
+		return invalid(err.Error())
 	}
 	if err := req.Properties.validate(); err != nil {
 		return err
@@ -86,24 +105,34 @@ func (c *Client) SubmitOCR(ctx context.Context, token *AuthToken, scanID string,
 	if err := VerifyAuthToken(token); err != nil {
 		return err
 	}
+	head := *req
+	head.Base64, head.Content = "", nil
+	body, err := base64Body(&head, req.Base64, req.Content)
+	if err != nil {
+		return fmt.Errorf("copyleaks: encode PUT /v3/scans/submit/ocr request: %w", err)
+	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPut,
-		path:   "/v3/scans/submit/ocr/" + segment(scanID),
-		token:  token,
-		body:   req,
+		method:      http.MethodPut,
+		path:        "/v3/scans/submit/ocr/" + segment(scanID),
+		token:       token,
+		rawBody:     body,
+		contentType: "application/json",
+		idempotent:  true,
 	}, nil)
 }
 
-// SubmitURL starts a Plagiarism Checker scan of a web page. It works like SubmitFile.
-//
+// SubmitURL starts a Plagiarism Checker scan of a web page, like SubmitFile.
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-url.
 func (c *Client) SubmitURL(ctx context.Context, token *AuthToken, scanID string, req *URLSubmission) error {
-	if err := validateSubmitScanID(scanID); err != nil {
-		return err
+	if err := validate.SubmitScanID(scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if req == nil || req.URL == "" {
 		return invalid("URL is required")
 	}
+	if err := validateVerb(req.Verb); err != nil {
+		return err
+	}
 	if err := req.Properties.validate(); err != nil {
 		return err
 	}
@@ -111,30 +140,39 @@ func (c *Client) SubmitURL(ctx context.Context, token *AuthToken, scanID string,
 		return err
 	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPut,
-		path:   "/v3/scans/submit/url/" + segment(scanID),
-		token:  token,
-		body:   req,
+		method:     http.MethodPut,
+		path:       "/v3/scans/submit/url/" + segment(scanID),
+		token:      token,
+		body:       req,
+		idempotent: true,
 	}, nil)
 }
 
-// ExportRequest is the body of Export. It lists the artifacts of a scan to upload to
-// your servers.
+// ExportRequest is the body of Export: the artifacts of a scan to upload to your servers.
 type ExportRequest struct {
-	// CompletionWebhook is called when the export is done (required); see
-	// ParseExportCompletedWebhook.
+	// CompletionWebhook is called when the export is done (required); see ParseExportCompletedWebhook.
 	CompletionWebhook string `json:"completionWebhook"`
-	// MaxRetries is how many times each upload is retried, from 1 to 12. The server
-	// default is 3.
+	// CompletionWebhookHeaders are extra headers of the CompletionWebhook request, as [name, value] pairs.
+	CompletionWebhookHeaders [][]string `json:"completionWebhookHeaders,omitempty"`
+	// MaxRetries is how many times each upload is retried, 1 to 12 (default 3).
 	MaxRetries int `json:"maxRetries,omitempty"`
 	// DeveloperPayload is sent back in the export-completed webhook.
 	DeveloperPayload string `json:"developerPayload,omitempty"`
-	// Results are the results to export, by result ID from the completed webhook.
+	// Results are the results to export, by result ID from the completed webhook; see ParseExportedResult.
 	Results []ExportResult `json:"results,omitempty"`
 	// PDFReport exports the PDF report. It requires ScanProperties.PDF.Create on submit.
 	PDFReport *ExportTarget `json:"pdfReport,omitempty"`
-	// CrawledVersion exports the crawled version of the submitted content.
+	// CrawledVersion exports the crawled version of the submitted content; see ParseExportedCrawledVersion.
 	CrawledVersion *ExportTarget `json:"crawledVersion,omitempty"`
+	// AIDetection exports the AI Text Detection report, with AI Logic when it was on. It requires
+	// ScanProperties.AIGeneratedText.Detect on submit. See ParseExportedAIDetection.
+	AIDetection *ExportTarget `json:"aiDetection,omitempty"`
+	// WritingFeedback exports the Grammar Checker report; it requires ScanProperties.WritingFeedback.Enable.
+	// See ParseExportedWritingFeedback.
+	WritingFeedback *ExportTarget `json:"writingFeedback,omitempty"`
+	// Overview exports the Gen-AI Overview. It requires ScanProperties.Overview.Enable on submit.
+	// See ParseExportedOverview.
+	Overview *ExportTarget `json:"overview,omitempty"`
 }
 
 // ExportResult uploads one result of a scan.
@@ -159,18 +197,15 @@ type ExportTarget struct {
 	Headers [][]string `json:"headers,omitempty"`
 }
 
-// Export uploads the artifacts of a completed scan to your servers, then calls
-// req.CompletionWebhook. exportID is a new ID for the export. Both IDs must be 3 to 36
-// characters from [a-z0-9!@$^&+%=_(){}<>'";:/.,~`|\-] and must not contain g, then o or
-// 0, then gle (as in google).
-//
-// See https://docs.copyleaks.com/reference/actions/downloads/export.
+// Export uploads the artifacts of a completed scan to your servers, then calls req.CompletionWebhook. exportID
+// is new. Both IDs must be 3 to 36 characters from [a-z0-9!@$^&+%=_(){}<>'";:/.,~`|\-] and must not contain g,
+// then o or 0, then gle (as in google). See https://docs.copyleaks.com/reference/actions/downloads/export.
 func (c *Client) Export(ctx context.Context, token *AuthToken, scanID, exportID string, req *ExportRequest) error {
-	if err := validateExportID("scan ID", scanID); err != nil {
-		return err
+	if err := validate.ExportID("scan ID", scanID); err != nil {
+		return invalid(err.Error())
 	}
-	if err := validateExportID("export ID", exportID); err != nil {
-		return err
+	if err := validate.ExportID("export ID", exportID); err != nil {
+		return invalid(err.Error())
 	}
 	if err := req.validate(); err != nil {
 		return err
@@ -179,10 +214,13 @@ func (c *Client) Export(ctx context.Context, token *AuthToken, scanID, exportID 
 		return err
 	}
 	return c.do(ctx, apiRequest{
-		method: http.MethodPost,
-		path:   "/v3/downloads/" + segment(scanID) + "/export/" + segment(exportID),
-		token:  token,
-		body:   req,
+		method:     http.MethodPost,
+		path:       "/v3/downloads/" + segment(scanID) + "/export/" + segment(exportID),
+		token:      token,
+		body:       req,
+		idempotent: true,
+		// After a 503 the export ID belongs to a failed export: a retry would only get 409.
+		noRetryOn503: true,
 	}, nil)
 }
 
@@ -199,9 +237,9 @@ func (r *ExportRequest) validate() error {
 			return invalid("each of Results needs ID, Endpoint and Verb")
 		}
 	}
-	for _, t := range []*ExportTarget{r.PDFReport, r.CrawledVersion} {
+	for _, t := range []*ExportTarget{r.PDFReport, r.CrawledVersion, r.AIDetection, r.WritingFeedback, r.Overview} {
 		if t != nil && (t.Endpoint == "" || t.Verb == "") {
-			return invalid("PDFReport and CrawledVersion need Endpoint and Verb")
+			return invalid("PDFReport, CrawledVersion, AIDetection, WritingFeedback and Overview need Endpoint and Verb")
 		}
 	}
 	return nil
@@ -209,11 +247,9 @@ func (r *ExportRequest) validate() error {
 
 // StartRequest is the body of Start.
 type StartRequest struct {
-	// Trigger lists the IDs of up to 100 scans, submitted with SubmitActionCheckCredits or
-	// SubmitActionIndex, to start (required).
+	// Trigger lists up to 100 scan IDs to start (required).
 	Trigger []string `json:"trigger"`
-	// ErrorHandling is what happens when some of the scans are in error. The default,
-	// StartErrorHandlingCancel, cancels the request.
+	// ErrorHandling is what happens when some of the scans are in error.
 	ErrorHandling StartErrorHandling `json:"errorHandling"`
 }
 
@@ -241,8 +277,7 @@ type StartedScan struct {
 	ID string `json:"id"`
 }
 
-// UnmarshalJSON accepts a scan as an object with an id, which the server sends, or as a
-// bare scan ID string, as the API reference shows it.
+// UnmarshalJSON accepts an object with an id (as the server sends) or a bare scan ID (as the API reference shows).
 func (s *StartedScan) UnmarshalJSON(b []byte) error {
 	if len(b) > 0 && b[0] == '"' {
 		return json.Unmarshal(b, &s.ID)
@@ -251,9 +286,7 @@ func (s *StartedScan) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(s))
 }
 
-// Start starts scans that were submitted with SubmitActionCheckCredits or
-// SubmitActionIndex.
-//
+// Start starts scans that were submitted with SubmitActionCheckCredits or SubmitActionIndex.
 // See https://docs.copyleaks.com/reference/actions/authenticity/start.
 func (c *Client) Start(ctx context.Context, token *AuthToken, req *StartRequest) (*StartResponse, error) {
 	if req == nil || len(req.Trigger) == 0 || len(req.Trigger) > 100 {
@@ -279,11 +312,9 @@ func (c *Client) Start(ctx context.Context, token *AuthToken, req *StartRequest)
 type DeleteRequest struct {
 	// Scans are the completed scans to delete, up to 10,000 (required).
 	Scans []DeleteScan `json:"scans"`
-	// Purge also removes every trace of the scans from the Shared Data Hub and the Private
-	// Cloud Hubs, so they are never found as results again.
+	// Purge also removes the scans from the Shared Data Hub and Private Cloud Hubs, so they never match again.
 	Purge bool `json:"purge,omitempty"`
-	// CompletionWebhook is called with a POST request, without a body, when the deletion
-	// is done.
+	// CompletionWebhook is called with a POST request, without a body, when the deletion is done.
 	CompletionWebhook string `json:"completionWebhook,omitempty"`
 	// Headers are extra headers of the CompletionWebhook request, as [name, value] pairs.
 	Headers [][]string `json:"headers,omitempty"`
@@ -295,9 +326,7 @@ type DeleteScan struct {
 	ID string `json:"id"`
 }
 
-// Delete deletes completed scans, with their results and metadata. The deletion runs in
-// the background and can take a few minutes.
-//
+// Delete deletes completed scans with their results and metadata, in the background (a few minutes).
 // See https://docs.copyleaks.com/reference/actions/authenticity/delete.
 func (c *Client) Delete(ctx context.Context, token *AuthToken, req *DeleteRequest) error {
 	if req == nil || len(req.Scans) == 0 || len(req.Scans) > 10000 {
@@ -320,11 +349,10 @@ func (c *Client) Delete(ctx context.Context, token *AuthToken, req *DeleteReques
 }
 
 // ResendWebhook asks Copyleaks to send the status webhook of a finished scan again.
-//
 // See https://docs.copyleaks.com/reference/actions/authenticity/resend-webhook.
 func (c *Client) ResendWebhook(ctx context.Context, token *AuthToken, scanID string) error {
-	if err := validateID("scan ID", scanID); err != nil {
-		return err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return invalid(err.Error())
 	}
 	if err := VerifyAuthToken(token); err != nil {
 		return err
@@ -343,7 +371,6 @@ type CreditsBalance struct {
 }
 
 // CreditsBalance returns the credit balance of the account.
-//
 // See https://docs.copyleaks.com/reference/actions/admin/check-credits.
 func (c *Client) CreditsBalance(ctx context.Context, token *AuthToken) (*CreditsBalance, error) {
 	if err := VerifyAuthToken(token); err != nil {
@@ -364,9 +391,7 @@ func (c *Client) CreditsBalance(ctx context.Context, token *AuthToken) (*Credits
 // usageDateLayout is the dd-MM-yyyy date format of UsagesHistoryCSV.
 const usageDateLayout = "02-01-2006"
 
-// UsagesHistoryCSV returns the usage history of the account between two dates,
-// inclusive, as a CSV file. Only the dates of start and end are used.
-//
+// UsagesHistoryCSV returns the account's usage history from start to end (dates only, inclusive) as CSV.
 // See https://docs.copyleaks.com/reference/actions/admin/usage-history.
 func (c *Client) UsagesHistoryCSV(ctx context.Context, token *AuthToken, start, end time.Time) ([]byte, error) {
 	if start.IsZero() || end.IsZero() {

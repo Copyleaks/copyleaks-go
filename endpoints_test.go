@@ -213,7 +213,7 @@ func endpointCases(t *testing.T) []endpointCase {
 		{
 			name:     "SupportedFileTypes",
 			method:   http.MethodGet,
-			path:     "/v3/miscellaneous/supported-file-types",
+			path:     "/v3/miscellaneous/supported-plagiarism-file-types",
 			status:   http.StatusOK,
 			response: fixture(t, "supported_file_types.json"),
 			call: func(ctx context.Context, c *Client) (any, error) {
@@ -398,48 +398,52 @@ func endpointCases(t *testing.T) []endpointCase {
 
 func TestEndpointRequestsAndResponses(t *testing.T) {
 	for _, tc := range endpointCases(t) {
-		t.Run(tc.name, func(t *testing.T) {
-			env := newTestEnv(t, tc.status, tc.response)
-			got, err := tc.call(context.Background(), env.client(t))
-			if err != nil {
-				t.Fatalf("call failed: %v", err)
-			}
-			req := env.next(t)
+		t.Run(tc.name, func(t *testing.T) { runEndpointCase(t, tc) })
+	}
+}
 
-			wantServer := tc.server
-			if wantServer == "" {
-				wantServer = "api"
-			}
-			if req.server != wantServer || req.method != tc.method || req.path != tc.path {
-				t.Errorf("request = %s server %s %s, want %s server %s %s", req.server, req.method, req.path, wantServer, tc.method, tc.path)
-			}
-			if tc.query != nil && !reflect.DeepEqual(req.query, tc.query) {
-				t.Errorf("query = %v, want %v", req.query, tc.query)
-			}
-			wantAuth := ""
-			if tc.auth {
-				wantAuth = "Bearer " + testAccessToken
-			}
-			if got := req.header.Get("Authorization"); got != wantAuth {
-				t.Errorf("Authorization = %q, want %q", got, wantAuth)
-			}
-			if got, want := req.header.Get("User-Agent"), "copyleaks-go-sdk/"+Version; got != want {
-				t.Errorf("User-Agent = %q, want %q", got, want)
-			}
-			if tc.body == "" {
-				if len(req.body) != 0 || req.header.Get("Content-Type") != "" {
-					t.Errorf("unexpected body %q with Content-Type %q", req.body, req.header.Get("Content-Type"))
-				}
-			} else {
-				if got := req.header.Get("Content-Type"); got != "application/json" {
-					t.Errorf("Content-Type = %q, want application/json", got)
-				}
-				assertJSONEqual(t, req.body, tc.body)
-			}
-			if tc.check != nil {
-				tc.check(t, got)
-			}
-		})
+// runEndpointCase calls tc against a test server and checks the request and the result.
+func runEndpointCase(t *testing.T, tc endpointCase) {
+	t.Helper()
+	env := newTestEnv(t, tc.status, tc.response)
+	got, err := tc.call(context.Background(), env.client(t))
+	if err != nil {
+		t.Fatalf("call failed: %v", err)
+	}
+	req := env.next(t)
+
+	wantServer := tc.server
+	if wantServer == "" {
+		wantServer = "api"
+	}
+	if req.server != wantServer || req.method != tc.method || req.path != tc.path {
+		t.Errorf("request = %s server %s %s, want %s server %s %s", req.server, req.method, req.path, wantServer, tc.method, tc.path)
+	}
+	if tc.query != nil && !reflect.DeepEqual(req.query, tc.query) {
+		t.Errorf("query = %v, want %v", req.query, tc.query)
+	}
+	wantAuth := ""
+	if tc.auth {
+		wantAuth = "Bearer " + testAccessToken
+	}
+	if got := req.header.Get("Authorization"); got != wantAuth {
+		t.Errorf("Authorization = %q, want %q", got, wantAuth)
+	}
+	if got, want := req.header.Get("User-Agent"), "copyleaks-go-sdk/"+Version; got != want {
+		t.Errorf("User-Agent = %q, want %q", got, want)
+	}
+	if tc.body == "" {
+		if len(req.body) != 0 || req.header.Get("Content-Type") != "" {
+			t.Errorf("unexpected body %q with Content-Type %q", req.body, req.header.Get("Content-Type"))
+		}
+	} else {
+		if got := req.header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+		assertJSONEqual(t, req.body, tc.body)
+	}
+	if tc.check != nil {
+		tc.check(t, got)
 	}
 }
 

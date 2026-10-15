@@ -1,10 +1,13 @@
 package copyleaks
 
-// ScanProperties configures a Plagiarism Checker scan. Only Webhooks.Status is required.
-// Every other field is optional and is left out of the request when it has its zero
-// value, so the server default applies. Pointer fields are pointers because their zero
-// value differs from the server default; set them with Ptr.
-//
+import (
+	"fmt"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
+)
+
+// ScanProperties configures a Plagiarism Checker scan. Only Webhooks.Status is required; zero values are left
+// out, so server defaults apply. Pointer fields have non-zero server defaults; set them with Ptr.
 // See https://docs.copyleaks.com/reference/actions/authenticity/submit-file.
 type ScanProperties struct {
 	// Webhooks sets the URLs that Copyleaks calls with the scan status (required).
@@ -17,8 +20,7 @@ type ScanProperties struct {
 	IncludeHTML bool `json:"includeHtml,omitempty"`
 	// DeveloperPayload is sent back in the webhooks of the scan. Up to 512 characters.
 	DeveloperPayload string `json:"developerPayload,omitempty"`
-	// Expiration is how many hours the scan is kept after it completes, from 1 to 2880.
-	// The server default is 2880.
+	// Expiration is how many hours the scan is kept after it completes, 1 to 2880 (default 2880).
 	Expiration int `json:"expiration,omitempty"`
 	// Author identifies the author of the content.
 	Author *Author `json:"author,omitempty"`
@@ -32,33 +34,46 @@ type ScanProperties struct {
 	Exclude *Exclude `json:"exclude,omitempty"`
 	// PDF requests and customizes a PDF report.
 	PDF *PDF `json:"pdf,omitempty"`
-	// DisplayLanguage is the language of the scan's PDF report: "en" (the server default),
-	// "es", "pt", "fr", "de" or "it". The codes are lowercase and case-sensitive. It is
-	// stored with the scan, so it also applies to a PDF report requested later.
+	// DisplayLanguage is the PDF report language: "en" (default), "es", "pt", "fr", "de" or "it", lowercase.
+	// It is stored with the scan, so it also applies to a PDF report requested later.
 	DisplayLanguage string `json:"displayLanguage,omitempty"`
-	// SensitivityLevel trades speed for coverage, from 1 (fastest) to 5 (most thorough).
-	// The server default is 3.
+	// SensitivityLevel trades speed for coverage, 1 (fastest) to 5 (most thorough); default 3.
 	SensitivityLevel int `json:"sensitivityLevel,omitempty"`
-	// CheatDetection checks the content for text manipulation and reports it as scan
-	// alerts in the completed webhook.
+	// CheatDetection reports text manipulation as scan alerts in the completed webhook.
 	CheatDetection bool `json:"cheatDetection,omitempty"`
 	// ScanMethodAlgorithm chooses between maximum coverage (the default) and maximum results.
 	ScanMethodAlgorithm ScanMethodAlgorithm `json:"scanMethodAlgorithm,omitempty"`
-	// AIGeneratedText adds AI Text Detection to the scan. The result arrives as a
-	// suspected-ai-text alert in the completed webhook; see CompletedWebhook.AIDetectionResult.
+	// AIGeneratedText adds AI Text Detection to the scan; see CompletedWebhook.AIDetectionResult.
 	AIGeneratedText *AIGeneratedText `json:"aiGeneratedText,omitempty"`
-	// AISourceMatch identifies the online sources that are suspected of containing
-	// AI-generated text. It only applies to documents detected as English.
+	// AISourceMatch finds online sources suspected of containing AI-generated text (English documents only).
 	AISourceMatch *AISourceMatch `json:"aiSourceMatch,omitempty"`
-	// CustomMetadata is attached to the document in a Private Cloud Hub and added to the
-	// results that match it.
+	// CustomMetadata is attached to the document in a Private Cloud Hub and to the results that match it.
 	CustomMetadata []CustomMetadata `json:"customMetadata,omitempty"`
+	// ScanTimeZone is the IANA time zone of the PDF report's scan time, such as "America/New_York".
+	// It is case-sensitive; the default is the time zone of the account's country, or UTC.
+	ScanTimeZone string `json:"scanTimeZone,omitempty"`
+	// Course identifies the course of the content, for analytics.
+	Course *Course `json:"course,omitempty"`
+	// Assignment identifies the assignment of the content, for analytics.
+	Assignment *Assignment `json:"assignment,omitempty"`
+	// Institution identifies the institution of the content, for analytics.
+	Institution *Institution `json:"institution,omitempty"`
+	// SensitiveDataProtection masks sensitive data with # characters (plans of 2,500 pages or more).
+	SensitiveDataProtection *SensitiveDataProtection `json:"sensitiveDataProtection,omitempty"`
+	// WritingFeedback adds the Grammar Checker to the scan.
+	WritingFeedback *ScanWritingFeedback `json:"writingFeedback,omitempty"`
+	// Overview adds a Gen-AI Overview of the scan results; export it with ExportRequest.Overview.
+	Overview *ScanOverview `json:"overview,omitempty"`
+	// InternalAISourceMatch finds sources in the Copyleaks internal AI database; see Results.InternalAIData.
+	InternalAISourceMatch *InternalAISourceMatch `json:"internalAiSourceMatch,omitempty"`
+	// References turns on the Citation Checker; see CompletedWebhook.ReferencesValidation.
+	References *References `json:"references,omitempty"`
 }
 
 // SubmitWebhooks sets the webhook URLs of a scan.
 type SubmitWebhooks struct {
-	// Status is called when the scan status changes (required). Its {STATUS} placeholder
-	// is replaced with completed, error, creditschecked or indexed.
+	// Status is called when the scan status changes (required); {STATUS} becomes completed, error,
+	// creditschecked or indexed.
 	Status string `json:"status"`
 	// StatusHeaders are extra headers for the status webhook, as [name, value] pairs.
 	StatusHeaders [][]string `json:"statusHeaders,omitempty"`
@@ -74,12 +89,29 @@ type Author struct {
 	ID string `json:"id,omitempty"`
 }
 
+// Course identifies the course of the scanned content, for analytics.
+type Course struct {
+	// ID is a unique identifier of the course.
+	ID string `json:"id,omitempty"`
+}
+
+// Assignment identifies the assignment of the scanned content, for analytics.
+type Assignment struct {
+	// ID is a unique identifier of the assignment.
+	ID string `json:"id,omitempty"`
+}
+
+// Institution identifies the institution of the scanned content, for analytics.
+type Institution struct {
+	// ID is a unique identifier of the institution.
+	ID string `json:"id,omitempty"`
+}
+
 // Filters fine-tunes which results are included in a scan report.
 type Filters struct {
 	// IdenticalEnabled matches exact words. The server default is true.
 	IdenticalEnabled *bool `json:"identicalEnabled,omitempty"`
-	// MinorChangesEnabled matches nearly identical words, such as slow and slowly.
-	// The server default is true.
+	// MinorChangesEnabled matches nearly identical words, such as slow and slowly. The server default is true.
 	MinorChangesEnabled *bool `json:"minorChangesEnabled,omitempty"`
 	// RelatedMeaningEnabled matches paraphrased content. The server default is true.
 	RelatedMeaningEnabled *bool `json:"relatedMeaningEnabled,omitempty"`
@@ -89,8 +121,7 @@ type Filters struct {
 	SafeSearch bool `json:"safeSearch,omitempty"`
 	// Domains are domains to include in or exclude from the results; see DomainsMode.
 	Domains []string `json:"domains,omitempty"`
-	// DomainsMode sets whether Domains are included or excluded. The server default is
-	// DomainsModeExclude.
+	// DomainsMode sets whether Domains are included or excluded.
 	DomainsMode *DomainsMode `json:"domainsMode,omitempty"`
 	// AllowSameDomain allows results from the domain of the submitted URL.
 	AllowSameDomain bool `json:"allowSameDomain,omitempty"`
@@ -102,6 +133,8 @@ type Scanning struct {
 	Internet *bool `json:"internet,omitempty"`
 	// Exclude leaves matching submissions out of the results.
 	Exclude *ScanningExclude `json:"exclude,omitempty"`
+	// Include keeps only matching submissions in the results.
+	Include *ScanningInclude `json:"include,omitempty"`
 	// Repositories are the Private Cloud Hubs to compare the content against.
 	Repositories []ScanningRepository `json:"repositories,omitempty"`
 	// CopyleaksDB compares the content against the Shared Data Hub.
@@ -110,11 +143,21 @@ type Scanning struct {
 	CrossLanguages *CrossLanguages `json:"crossLanguages,omitempty"`
 }
 
-// ScanningExclude leaves submissions out of the results.
+// ScanningExclude leaves submissions out of the results. Its lists are pointers, so that it stays comparable.
 type ScanningExclude struct {
-	// IDPattern excludes the submissions whose scan ID matches the pattern, 1 to 36
-	// characters. A * matches any number of characters and a . matches exactly one
-	// non-whitespace character.
+	// IDPattern excludes submissions whose scan ID matches it, 1 to 36 characters; * matches any number of
+	// characters and . exactly one non-whitespace character. ScanningInclude.IDPattern uses the same syntax.
+	IDPattern string `json:"idPattern,omitempty"`
+	// BacklinksDomains excludes results that link back to up to 10 domains, 1 to 256 characters each.
+	BacklinksDomains *[]string `json:"backlinksDomains,omitempty"`
+	// Text excludes results that contain up to 5 phrases, 1 to 30 characters each.
+	Text *[]string `json:"text,omitempty"`
+}
+
+// ScanningInclude keeps only some submissions in the results.
+type ScanningInclude struct {
+	// IDPattern keeps only Shared Data Hub and Private Cloud Hub results whose scan ID matches it; same syntax
+	// as ScanningExclude.IDPattern.
 	IDPattern string `json:"idPattern,omitempty"`
 }
 
@@ -132,8 +175,7 @@ type ScanningRepository struct {
 type CopyleaksDB struct {
 	// IncludeMySubmissions compares against content that you added to the Shared Data Hub.
 	IncludeMySubmissions bool `json:"includeMySubmissions,omitempty"`
-	// IncludeOthersSubmissions compares against content that other users added to the
-	// Shared Data Hub.
+	// IncludeOthersSubmissions compares against content that other users added to the Shared Data Hub.
 	IncludeOthersSubmissions bool `json:"includeOthersSubmissions,omitempty"`
 }
 
@@ -153,6 +195,9 @@ type CrossLanguage struct {
 type Indexing struct {
 	// Repositories are the Private Cloud Hubs to index the content in.
 	Repositories []IndexingRepository `json:"repositories,omitempty"`
+	// CopyleaksDB adds the content to the Shared Data Hub. Nil keeps the default: added when Scanning.CopyleaksDB
+	// compares it against any submissions.
+	CopyleaksDB *bool `json:"copyleaksDb,omitempty"`
 }
 
 // IndexingRepository is a Private Cloud Hub to index the content in.
@@ -175,8 +220,7 @@ type Exclude struct {
 	TableOfContents bool `json:"tableOfContents,omitempty"`
 	// Titles excludes the titles of an HTML document.
 	Titles bool `json:"titles,omitempty"`
-	// HTMLTemplate excludes the text that repeats across the pages of a site, such as the
-	// header and the footer.
+	// HTMLTemplate excludes text that repeats across the pages of a site, such as the header and the footer.
 	HTMLTemplate bool `json:"htmlTemplate,omitempty"`
 	// DocumentTemplateIDs excludes the template text found in up to three other scans.
 	DocumentTemplateIDs []string `json:"documentTemplateIds,omitempty"`
@@ -200,20 +244,18 @@ type PDF struct {
 	LargeLogo string `json:"largeLogo,omitempty"`
 	// RTL aligns the text of the report from right to left.
 	RTL bool `json:"rtl,omitempty"`
-	// Version is the version of the report layout. ReportVersion overrides it, and the API
-	// reference recommends ReportVersion instead.
+	// Version is the version of the report layout. ReportVersion overrides it.
+	//
+	// Deprecated: The API reference deprecates pdf.version. Use ReportVersion.
 	Version PDFVersion `json:"version,omitempty"`
-	// ReportVersion is the version of the report layout: PDFReportVersionV1,
-	// PDFReportVersionV2, PDFReportVersionV3 or PDFReportVersionLatest. The values are
-	// lowercase and case-sensitive. It overrides Version when both are set. When neither
-	// is set, accounts created before 2025-05-15 get v1 and newer accounts get the latest.
+	// ReportVersion is a PDFReportVersion constant (case-sensitive) and overrides Version. When neither is set,
+	// accounts created before 2025-05-15 get v1 and newer accounts get the latest.
 	ReportVersion string `json:"reportVersion,omitempty"`
 	// Colors customizes the colors of the report.
 	Colors *PDFColors `json:"colors,omitempty"`
 }
 
-// PDFColors customizes the colors of a PDF report. Colors are in HEX format, such as
-// "#FE5758".
+// PDFColors customizes the colors of a PDF report, in HEX format such as "#FE5758".
 type PDFColors struct {
 	// MainStrip is the color of the main strip.
 	MainStrip string `json:"mainStrip,omitempty"`
@@ -225,16 +267,83 @@ type PDFColors struct {
 	MinorChanges string `json:"minorChanges,omitempty"`
 	// RelatedMeaning is the highlight color of paraphrased matches.
 	RelatedMeaning string `json:"relatedMeaning,omitempty"`
+	// AIDetection is the highlight color of AI-generated text.
+	AIDetection string `json:"aiDetection,omitempty"`
+	// WritingFeedback is the highlight color of Grammar Checker corrections.
+	WritingFeedback string `json:"writingFeedback,omitempty"`
 }
 
 // AIGeneratedText adds AI Text Detection to a Plagiarism Checker scan.
 type AIGeneratedText struct {
 	// Detect detects whether the text was written by AI.
 	Detect bool `json:"detect"`
+	// Sensitivity is 1 to 3; see AITextDetectionRequest.Sensitivity. Zero keeps the default.
+	Sensitivity int `json:"sensitivity,omitempty"`
+	// Explain adds AI Logic, an explanation of the detection, for the languages that support it.
+	Explain *AIGeneratedTextExplain `json:"explain,omitempty"`
 }
 
-// AISourceMatch identifies the online sources that are suspected of containing
-// AI-generated text. See ScanProperties.AISourceMatch.
+// AIGeneratedTextExplain turns AI Logic on in a Plagiarism Checker scan.
+type AIGeneratedTextExplain struct {
+	// Enable turns AI Logic on.
+	Enable bool `json:"enable"`
+}
+
+// SensitiveDataProtection masks kinds of sensitive data in the scanned document, one per field.
+type SensitiveDataProtection struct {
+	// DriversLicense masks driver's license numbers.
+	DriversLicense bool `json:"driversLicense,omitempty"`
+	// Credentials masks credentials, such as passwords, authentication tokens and cloud keys.
+	Credentials bool `json:"credentials,omitempty"`
+	// Passport masks passport numbers.
+	Passport bool `json:"passport,omitempty"`
+	// Network masks network identifiers, such as IP and MAC addresses.
+	Network bool `json:"network,omitempty"`
+	// URL masks URLs.
+	URL bool `json:"url,omitempty"`
+	// EmailAddress masks email addresses.
+	EmailAddress bool `json:"emailAddress,omitempty"`
+	// CreditCard masks credit card numbers.
+	CreditCard bool `json:"creditCard,omitempty"`
+	// PhoneNumber masks phone numbers.
+	PhoneNumber bool `json:"phoneNumber,omitempty"`
+}
+
+// ScanWritingFeedback adds the Grammar Checker to a Plagiarism Checker scan.
+type ScanWritingFeedback struct {
+	// Enable turns the Grammar Checker on.
+	Enable bool `json:"enable"`
+	// Score sets the weight of each correction category in the overall writing score.
+	Score *GrammarScoreWeights `json:"score,omitempty"`
+}
+
+// ScanOverview adds a Gen-AI Overview, a summary of the key insights of the scan.
+type ScanOverview struct {
+	// Enable turns the overview on.
+	Enable bool `json:"enable"`
+	// IgnoreAIDetection leaves the AI Text Detection results out of the overview.
+	IgnoreAIDetection bool `json:"ignoreAIDetection,omitempty"`
+	// IgnorePlagiarismDetection leaves the plagiarism results out of the overview.
+	IgnorePlagiarismDetection bool `json:"ignorePlagiarismDetection,omitempty"`
+	// IgnoreWritingFeedback leaves the Grammar Checker results out of the overview.
+	IgnoreWritingFeedback bool `json:"ignoreWritingFeedback,omitempty"`
+	// IgnoreAuthorData leaves the author's earlier scans out of the overview.
+	IgnoreAuthorData bool `json:"ignoreAuthorData,omitempty"`
+}
+
+// InternalAISourceMatch configures ScanProperties.InternalAISourceMatch.
+type InternalAISourceMatch struct {
+	// Enable turns Internal AI Source Match on. The server default is false.
+	Enable bool `json:"enable"`
+}
+
+// References configures the Citation Checker. See ScanProperties.References.
+type References struct {
+	// Validate detects, parses and validates every reference in the text.
+	Validate bool `json:"validate"`
+}
+
+// AISourceMatch configures ScanProperties.AISourceMatch.
 type AISourceMatch struct {
 	// Enable turns AI Source Match on. The server default is false.
 	Enable bool `json:"enable"`
@@ -254,11 +363,9 @@ type SubmitAction int
 const (
 	// SubmitActionScan starts the scan right away. It is the default.
 	SubmitActionScan SubmitAction = 0
-	// SubmitActionCheckCredits only reports the cost of the scan, in a credits-checked
-	// webhook. Start the scan later with Client.Start.
+	// SubmitActionCheckCredits only reports the cost in a credits-checked webhook; start it with Client.Start.
 	SubmitActionCheckCredits SubmitAction = 1
-	// SubmitActionIndex only indexes the content, for free, in the Shared Data Hub or a
-	// Private Cloud Hub.
+	// SubmitActionIndex only indexes the content, for free, in the Shared Data Hub or a Private Cloud Hub.
 	SubmitActionIndex SubmitAction = 2
 )
 
@@ -282,8 +389,7 @@ const (
 	DomainsModeExclude DomainsMode = 1
 )
 
-// MaskingPolicy sets who sees the content of a document indexed in a Private Cloud Hub
-// when it is found as a result.
+// MaskingPolicy sets who sees the content of a Private Cloud Hub document found as a result.
 type MaskingPolicy int
 
 const (
@@ -295,15 +401,15 @@ const (
 	MaskingPolicyMaskAllFiles MaskingPolicy = 2
 )
 
-// PDFVersion is the layout version of a PDF report. See PDF.Version.
+// PDFVersion is the layout version of a PDF report; see PDF.Version.
+//
+// Deprecated: Only the deprecated PDF.Version uses it. Use PDF.ReportVersion and the PDFReportVersion constants.
 type PDFVersion int
 
 const (
-	// PDFVersion1 is the first report layout. It is the server default for accounts
-	// created before 2025-05-15; see PDF.ReportVersion.
+	// PDFVersion1 is the first report layout.
 	PDFVersion1 PDFVersion = 1
-	// PDFVersion2 is the second report layout, which includes AI Text Detection results
-	// and cheat detection alerts.
+	// PDFVersion2 is the second report layout, with AI Text Detection results and cheat detection alerts.
 	PDFVersion2 PDFVersion = 2
 	// PDFVersion3 is the third report layout.
 	PDFVersion3 PDFVersion = 3
@@ -313,8 +419,7 @@ const (
 const (
 	// PDFReportVersionV1 is the first report layout.
 	PDFReportVersionV1 = "v1"
-	// PDFReportVersionV2 is the second report layout, which includes AI Text Detection
-	// results and cheat detection alerts.
+	// PDFReportVersionV2 is the second report layout, with AI Text Detection results and cheat detection alerts.
 	PDFReportVersionV2 = "v2"
 	// PDFReportVersionV3 is the third report layout.
 	PDFReportVersionV3 = "v3"
@@ -322,10 +427,56 @@ const (
 	PDFReportVersionLatest = "latest"
 )
 
-// Ptr returns a pointer to v. Use it to set the optional pointer fields of the request
-// types, such as Filters.IdenticalEnabled: copyleaks.Ptr(false).
+// Ptr returns a pointer to v, for optional pointer fields such as Filters.IdenticalEnabled: copyleaks.Ptr(false).
 func Ptr[T any](v T) *T {
 	return &v
+}
+
+// valueOf returns *p, or the zero value of T when p is nil.
+func valueOf[T any](p *T) T {
+	if p == nil {
+		var zero T
+		return zero
+	}
+	return *p
+}
+
+// maxAnalyticsIDLength is the longest ID of a Course, an Assignment or an Institution.
+const maxAnalyticsIDLength = 64
+
+// validate checks the limits of the scanning settings.
+func (s *Scanning) validate() error {
+	if s == nil {
+		return nil
+	}
+	if e := s.Exclude; e != nil {
+		if validate.UTF16Len(e.IDPattern) > 36 {
+			return invalid("Properties.Scanning.Exclude.IDPattern must be 1 to 36 characters")
+		}
+		if err := checkStrings("Properties.Scanning.Exclude.BacklinksDomains", valueOf(e.BacklinksDomains), 10, 256); err != nil {
+			return err
+		}
+		if err := checkStrings("Properties.Scanning.Exclude.Text", valueOf(e.Text), 5, 30); err != nil {
+			return err
+		}
+	}
+	if s.Include != nil && validate.UTF16Len(s.Include.IDPattern) > 36 {
+		return invalid("Properties.Scanning.Include.IDPattern must be 1 to 36 characters")
+	}
+	return nil
+}
+
+// checkStrings checks that list has at most maxItems strings of 1 to maxLength characters, naming it name.
+func checkStrings(name string, list []string, maxItems, maxLength int) error {
+	if len(list) > maxItems {
+		return invalid(fmt.Sprintf("%s must list at most %d items", name, maxItems))
+	}
+	for _, v := range list {
+		if n := validate.UTF16Len(v); n < 1 || n > maxLength {
+			return invalid(fmt.Sprintf("each of %s must be 1 to %d characters", name, maxLength))
+		}
+	}
+	return nil
 }
 
 // validate checks the scan properties that the server requires.
@@ -333,14 +484,32 @@ func (p *ScanProperties) validate() error {
 	if p.Webhooks.Status == "" {
 		return invalid("Properties.Webhooks.Status is required")
 	}
-	if utf16Len(p.DeveloperPayload) > 512 {
+	if validate.UTF16Len(p.DeveloperPayload) > 512 {
 		return invalid("Properties.DeveloperPayload must be at most 512 characters")
 	}
 	if p.SensitivityLevel != 0 && (p.SensitivityLevel < 1 || p.SensitivityLevel > 5) {
 		return invalid("Properties.SensitivityLevel must be 1 to 5")
 	}
-	if p.Scanning != nil && p.Scanning.Exclude != nil && utf16Len(p.Scanning.Exclude.IDPattern) > 36 {
-		return invalid("Properties.Scanning.Exclude.IDPattern must be 1 to 36 characters")
+	if err := p.Scanning.validate(); err != nil {
+		return err
+	}
+	var ids []string
+	if p.Course != nil {
+		ids = append(ids, p.Course.ID)
+	}
+	if p.Assignment != nil {
+		ids = append(ids, p.Assignment.ID)
+	}
+	if p.Institution != nil {
+		ids = append(ids, p.Institution.ID)
+	}
+	for _, id := range ids {
+		if validate.UTF16Len(id) > maxAnalyticsIDLength {
+			return invalid(fmt.Sprintf("Properties.Course.ID, Assignment.ID and Institution.ID must be at most %d characters", maxAnalyticsIDLength))
+		}
+	}
+	if a := p.AIGeneratedText; a != nil && a.Sensitivity != 0 && (a.Sensitivity < 1 || a.Sensitivity > 3) {
+		return invalid("Properties.AIGeneratedText.Sensitivity must be 1 to 3")
 	}
 	switch p.DisplayLanguage {
 	case "", "en", "es", "pt", "fr", "de", "it":

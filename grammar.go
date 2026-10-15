@@ -3,6 +3,8 @@ package copyleaks
 import (
 	"context"
 	"net/http"
+
+	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
 // GrammarCheckRequest is the body of CheckGrammar.
@@ -11,15 +13,13 @@ type GrammarCheckRequest struct {
 	Text string `json:"text"`
 	// Sandbox runs a free test check that returns mock results.
 	Sandbox bool `json:"sandbox,omitempty"`
-	// Language is the language code of the text, such as "en". The server detects the
-	// language when it is empty.
+	// Language is the language code of the text, such as "en"; empty lets the server detect it.
 	Language string `json:"language,omitempty"`
 	// Score sets the weight of each correction category in the overall score.
 	Score *GrammarScoreWeights `json:"score,omitempty"`
 }
 
-// GrammarScoreWeights sets the weight of each correction category in the overall score,
-// from 0.0 to 1.0. A nil weight keeps the server default, 1.0.
+// GrammarScoreWeights weighs each correction category in the overall score, 0.0 to 1.0; nil keeps 1.0.
 type GrammarScoreWeights struct {
 	// GrammarScoreWeight is the weight of grammar corrections.
 	GrammarScoreWeight *float64 `json:"grammarScoreWeight,omitempty"`
@@ -32,7 +32,6 @@ type GrammarScoreWeights struct {
 }
 
 // GrammarCheckResponse is the result of the Grammar Checker.
-//
 // See https://docs.copyleaks.com/reference/data-types/writing/writing-assistant.
 type GrammarCheckResponse struct {
 	// Score holds the writing scores, the readability and statistics of the text.
@@ -47,8 +46,7 @@ type GrammarCheckResponse struct {
 
 // GrammarScore holds the writing scores, the readability and statistics of a text.
 type GrammarScore struct {
-	// Corrections are the correction counts and scores of each category, and the overall
-	// score.
+	// Corrections are the correction counts and scores of each category, and the overall score.
 	Corrections *GrammarScoreCorrections `json:"corrections"`
 	// Readability is the readability of the text.
 	Readability *GrammarReadability `json:"readability"`
@@ -74,8 +72,7 @@ type GrammarScoreCorrections struct {
 	SentenceStructureCorrectionsCount int `json:"sentenceStructureCorrectionsCount"`
 	// SentenceStructureCorrectionsScore is the sentence structure score.
 	SentenceStructureCorrectionsScore int `json:"sentenceStructureCorrectionsScore"`
-	// SentenceStructureScoreWeight is the weight of the sentence structure score in the
-	// overall score.
+	// SentenceStructureScoreWeight is the weight of the sentence structure score in the overall score.
 	SentenceStructureScoreWeight float64 `json:"sentenceStructureScoreWeight"`
 	// WordChoiceCorrectionsCount is the number of word choice corrections.
 	WordChoiceCorrectionsCount int `json:"wordChoiceCorrectionsCount"`
@@ -95,8 +92,7 @@ type GrammarReadability struct {
 	ReadabilityLevel int `json:"readabilityLevel"`
 	// ReadabilityLevelText is the readability level as text, such as "10th to 12th Grader".
 	ReadabilityLevelText string `json:"readabilityLevelText"`
-	// ReadabilityLevelDescription describes the readability level, such as
-	// "Fairly difficult to read".
+	// ReadabilityLevelDescription describes the readability level, such as "Fairly difficult to read".
 	ReadabilityLevelDescription string `json:"readabilityLevelDescription"`
 }
 
@@ -139,13 +135,11 @@ type GrammarCorrectionRanges struct {
 	OperationTexts []string `json:"operationTexts"`
 }
 
-// CheckGrammar returns grammar, spelling and sentence structure corrections for a text.
-// The scan ID must be 3 to 36 characters.
-//
+// CheckGrammar returns grammar, spelling and sentence structure corrections. Scan ID: 3 to 36 characters.
 // See https://docs.copyleaks.com/reference/actions/writing-assistant/check.
 func (c *Client) CheckGrammar(ctx context.Context, token *AuthToken, scanID string, req *GrammarCheckRequest) (*GrammarCheckResponse, error) {
-	if err := validateID("scan ID", scanID); err != nil {
-		return nil, err
+	if err := validate.ID("scan ID", scanID); err != nil {
+		return nil, invalid(err.Error())
 	}
 	if req == nil || req.Text == "" {
 		return nil, invalid("Text is required")
@@ -186,10 +180,8 @@ type CorrectionType struct {
 	Description string `json:"description"`
 }
 
-// GrammarCorrectionTypes returns the correction types of the Grammar Checker, with texts
-// in the given language, such as "en". It needs no login.
-//
-// See https://docs.copyleaks.com/reference/actions/writing-assistant/correction-types.
+// GrammarCorrectionTypes returns the Grammar Checker correction types, with texts in language, such as "en".
+// No login needed. See https://docs.copyleaks.com/reference/actions/writing-assistant/correction-types.
 func (c *Client) GrammarCorrectionTypes(ctx context.Context, language string) (*CorrectionTypes, error) {
 	if language == "" {
 		return nil, invalid("language is required")

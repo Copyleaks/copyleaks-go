@@ -1,7 +1,4 @@
-// Command ai-text-detection logs in and checks a text with AI Text Detection, in sandbox
-// mode, which is free and returns mock results.
-//
-// Usage:
+// Command ai-text-detection checks a text with AI Text Detection in sandbox mode, which is free (mock results).
 //
 //	export COPYLEAKS_EMAIL=you@example.com COPYLEAKS_API_KEY=your-api-key
 //	go run ./examples/ai-text-detection

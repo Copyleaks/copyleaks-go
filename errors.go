@@ -6,39 +6,31 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
 var (
-	// ErrUnauthorized matches an *APIError with HTTP status 401: the login token or the API
-	// key was rejected. Check for it with errors.Is(err, ErrUnauthorized).
+	// ErrUnauthorized matches an *APIError with HTTP 401: the login token or the API key was rejected.
 	ErrUnauthorized = errors.New("copyleaks: unauthorized")
-	// ErrRateLimited matches an *APIError with HTTP status 429: too many requests were sent.
-	// Wait before calling again.
+	// ErrRateLimited matches an *APIError with HTTP 429. Wait before calling again (see APIError.RetryAfter).
 	ErrRateLimited = errors.New("copyleaks: rate limited")
-	// ErrUnderMaintenance matches an *APIError with HTTP status 503: the Copyleaks servers
-	// are unavailable for maintenance. Retry later with exponential backoff.
+	// ErrUnderMaintenance matches an *APIError with HTTP 503 (maintenance); retry later, or use WithRetry.
 	ErrUnderMaintenance = errors.New("copyleaks: under maintenance")
-	// ErrTokenExpired is returned, before any request is sent, when the AuthToken passed to
-	// a call has expired or expires within five minutes. Call Login again.
+	// ErrTokenExpired is returned, before any request, when the AuthToken expired or expires within five minutes.
 	ErrTokenExpired = errors.New("copyleaks: auth token expired")
-	// ErrInvalidArgument is matched by the errors of the client-side checks, which run
-	// before any request is sent: a missing required field, a malformed scan ID, a text
-	// that is too short, a base URL that does not use https, and so on.
+	// ErrInvalidArgument matches the client-side checks that fail before any request: a missing required field,
+	// a malformed scan ID, a too-short text, a non-https base URL, and so on.
 	ErrInvalidArgument = errors.New("copyleaks: invalid argument")
-	// ErrResponseTooLarge is matched by the error of a call whose successful response body
-	// is larger than the SDK accepts: 64 MiB for the usage history CSV and 16 MiB for
-	// JSON. The body is not truncated; the call fails.
+	// ErrResponseTooLarge matches a 2xx body over 64 MiB (usage CSV) or 16 MiB (JSON); it is not truncated.
 	ErrResponseTooLarge = errors.New("copyleaks: response too large")
 )
 
 // maxErrorMessageBody caps how much of the response body APIError.Error includes.
 const maxErrorMessageBody = 512
 
-// APIError is returned when the Copyleaks API answers with a non-2xx HTTP status.
-//
-// Use errors.Is with ErrUnauthorized, ErrRateLimited or ErrUnderMaintenance to check for
-// those cases, and errors.As to read the status code and the response body.
+// APIError is returned for a non-2xx HTTP status. Match it with errors.Is (ErrUnauthorized, ErrRateLimited,
+// ErrUnderMaintenance) or read it with errors.As.
 type APIError struct {
 	// StatusCode is the HTTP status code of the response.
 	StatusCode int
@@ -48,10 +40,11 @@ type APIError struct {
 	Endpoint string
 	// Body is the response body, up to 1 MiB. The server usually explains the error here.
 	Body []byte
+	// RetryAfter is the Retry-After delay of the response, or 0 without one; mostly set on HTTP 429 and 503.
+	RetryAfter time.Duration
 }
 
-// Error returns the method, endpoint and status of the failed request, and the start of
-// the response body.
+// Error returns the method, endpoint, status and the start of the response body.
 func (e *APIError) Error() string {
 	status := strconv.Itoa(e.StatusCode)
 	if text := http.StatusText(e.StatusCode); text != "" {
@@ -64,8 +57,7 @@ func (e *APIError) Error() string {
 	return msg
 }
 
-// Is reports whether e matches target: ErrUnauthorized for status 401, ErrRateLimited for
-// status 429 and ErrUnderMaintenance for status 503.
+// Is matches ErrUnauthorized (401), ErrRateLimited (429) and ErrUnderMaintenance (503).
 func (e *APIError) Is(target error) bool {
 	switch target {
 	case ErrUnauthorized:

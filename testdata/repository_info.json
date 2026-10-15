@@ -1,0 +1,11 @@
+{
+  "id": "private-data-hub-id",
+  "name": "Private Data Hub Name",
+  "description": "Your Description",
+  "permission": 4,
+  "status": 0,
+  "maxCredits": 1000,
+  "currentCredits": 900,
+  "maskingPolicy": 1,
+  "creationTime": "2024-09-09T10:43:52"
+}

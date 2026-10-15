@@ -145,10 +145,15 @@ func TestUserAgent(t *testing.T) {
 // countingTransport counts the requests that pass through it.
 type countingTransport struct {
 	count int
+	// base sends the requests; nil means http.DefaultTransport.
+	base http.RoundTripper
 }
 
 func (c *countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	c.count++
+	if c.base != nil {
+		return c.base.RoundTrip(r)
+	}
 	return http.DefaultTransport.RoundTrip(r)
 }
 

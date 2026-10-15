@@ -3,18 +3,16 @@ package copyleaks
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
 
-// AlertCodeSuspectedAIText is the code of the scan alert that carries the AI Text
-// Detection result of a Plagiarism Checker scan that had ScanProperties.AIGeneratedText
-// enabled.
+// AlertCodeSuspectedAIText is the code of the alert that carries the AI Text Detection result of a scan with
+// ScanProperties.AIGeneratedText.
 const AlertCodeSuspectedAIText = "suspected-ai-text"
 
-// CompletedWebhook is the payload of the completed webhook, which Copyleaks sends to
-// the status webhook URL when a Plagiarism Checker scan finishes successfully.
-//
+// CompletedWebhook is sent to the status webhook when a Plagiarism Checker scan succeeds.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/webhooks/scan-completed.
 type CompletedWebhook struct {
 	// Status is the scan status: 0 for success.
@@ -27,10 +25,44 @@ type CompletedWebhook struct {
 	Results *Results `json:"results"`
 	// Notifications are the scan alerts.
 	Notifications *Notifications `json:"notifications"`
+	// ReferencesValidation is the Citation Checker summary; per-reference results are in
+	// ExportedCrawledVersion.ReferencesValidation.
+	ReferencesValidation *ReferencesValidation `json:"referencesValidation"`
+	// WritingFeedback is the Grammar Checker summary; export the full report with ExportRequest.WritingFeedback.
+	WritingFeedback *WebhookWritingFeedback `json:"writingFeedback"`
+}
+
+// WebhookWritingFeedback is the Grammar Checker summary of a completed scan.
+type WebhookWritingFeedback struct {
+	// TextStatistics are statistics of the text.
+	TextStatistics *GrammarStatistics `json:"textStatistics"`
+	// Score holds the correction counts and scores of each category, and the overall score.
+	Score *GrammarScoreCorrections `json:"score"`
+	// Readability is the readability of the text.
+	Readability *GrammarReadability `json:"readability"`
+}
+
+// ReferencesValidation is the result of the Citation Checker.
+type ReferencesValidation struct {
+	// Summary counts the references that were found and validated.
+	Summary *ReferencesValidationSummary `json:"summary"`
+	// Results are the validated references; only the crawled version has them, not the completed webhook.
+	Results []ReferenceValidation `json:"results,omitempty"`
+}
+
+// ReferencesValidationSummary counts the references that the Citation Checker found and validated.
+type ReferencesValidationSummary struct {
+	// Total is the number of references found.
+	Total int `json:"total"`
+	// Academic is the number of references found to be academic.
+	Academic int `json:"academic"`
+	// AcademicValidated is the number of academic references that were fully corroborated.
+	AcademicValidated int `json:"academicValidated"`
+	// NonAcademicValidated is the number of other references fully corroborated by their cited source.
+	NonAcademicValidated int `json:"nonAcademicValidated"`
 }
 
 // ErrorWebhook is the payload of the error webhook, sent when a scan ends with an error.
-//
 // See https://docs.copyleaks.com/reference/data-types/authenticity/webhooks/error.
 type ErrorWebhook struct {
 	// Status is the scan status: 1 for error.
@@ -65,9 +97,7 @@ type WebhookErrorDetail struct {
 	Message string `json:"message"`
 }
 
-// CreditsCheckedWebhook is the payload of the creditsChecked webhook, sent for a scan
-// submitted with SubmitActionCheckCredits.
-//
+// CreditsCheckedWebhook is the creditsChecked webhook payload of a scan submitted with SubmitActionCheckCredits.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/webhooks/credits-checked.
 type CreditsCheckedWebhook struct {
 	// Status is the scan status: 2 for credits checked.
@@ -80,9 +110,7 @@ type CreditsCheckedWebhook struct {
 	ScannedDocument *WebhookScannedDocument `json:"scannedDocument"`
 }
 
-// IndexedWebhook is the payload of the indexed webhook, sent for a scan submitted with
-// SubmitActionIndex.
-//
+// IndexedWebhook is the indexed webhook payload of a scan submitted with SubmitActionIndex.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/webhooks/indexed.
 type IndexedWebhook struct {
 	// Status is the scan status: 3 for indexed.
@@ -91,9 +119,7 @@ type IndexedWebhook struct {
 	DeveloperPayload string `json:"developerPayload"`
 }
 
-// NewResultWebhook is the payload of the new-result webhook, sent to
-// SubmitWebhooks.NewResult each time a result is found while the scan still runs.
-//
+// NewResultWebhook is sent to SubmitWebhooks.NewResult each time a result is found while the scan runs.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/results/new-result.
 type NewResultWebhook struct {
 	// DeveloperPayload is the ScanProperties.DeveloperPayload of the scan.
@@ -108,12 +134,12 @@ type NewResultWebhook struct {
 	Batch []DatabaseResult `json:"batch"`
 	// Repositories are the new results from Private Cloud Hubs.
 	Repositories []RepositoryResult `json:"repositories"`
+	// InternalAIData are the new results from the Copyleaks internal AI database.
+	InternalAIData []InternalAIResult `json:"internalAIData"`
 }
 
-// ExportCompletedWebhook is the payload of the webhook that Copyleaks sends to
-// ExportRequest.CompletionWebhook when an export is done. Check that Completed is true
-// and that every task is healthy with a 2xx HTTPStatusCode.
-//
+// ExportCompletedWebhook is sent to ExportRequest.CompletionWebhook when an export is done. Check that Completed
+// is true and that every task is healthy with a 2xx HTTPStatusCode.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/webhooks/export-completed.
 type ExportCompletedWebhook struct {
 	// Completed reports whether the export finished without internal errors.
@@ -148,6 +174,36 @@ type WebhookScannedDocument struct {
 	CreationTime string `json:"creationTime"`
 	// Metadata is metadata of the scanned document.
 	Metadata *ResultMetadata `json:"metadata"`
+	// ExpectedCredits is the number of credits that the scan was expected to use.
+	ExpectedCredits int `json:"expectedCredits"`
+	// DetectedLanguage is the language code of the document, such as "en", when the server reports it.
+	DetectedLanguage string `json:"detectedLanguage"`
+	// Enabled reports the features that the scan ran, when the server reports them.
+	Enabled *ScanEnabledFeatures `json:"enabled"`
+}
+
+// ScanEnabledFeatures reports the features that a scan ran.
+type ScanEnabledFeatures struct {
+	// PlagiarismDetection reports the Plagiarism Checker.
+	PlagiarismDetection bool `json:"plagiarismDetection"`
+	// AIDetection reports AI Text Detection.
+	AIDetection bool `json:"aiDetection"`
+	// ExplainableAI reports AI Logic.
+	ExplainableAI bool `json:"explainableAi"`
+	// WritingFeedback reports the Grammar Checker.
+	WritingFeedback bool `json:"writingFeedback"`
+	// PDFReport reports the PDF report.
+	PDFReport bool `json:"pdfReport"`
+	// CheatDetection reports cheat detection.
+	CheatDetection bool `json:"cheatDetection"`
+	// Overview reports the Gen-AI Overview.
+	Overview bool `json:"overview"`
+	// ReferencesValidation reports the Citation Checker.
+	ReferencesValidation bool `json:"referencesValidation"`
+	// AISourceMatch reports AI Source Match.
+	AISourceMatch bool `json:"aiSourceMatch"`
+	// InternalAISourceMatch reports Internal AI Source Match.
+	InternalAISourceMatch bool `json:"internalAiSourceMatch"`
 }
 
 // Results are the results of a scan, by source.
@@ -162,6 +218,30 @@ type Results struct {
 	Repositories []RepositoryResult `json:"repositories"`
 	// Score is the aggregated score of all results.
 	Score *ResultsScore `json:"score"`
+	// InternalAIData are the results from the Copyleaks internal AI database.
+	InternalAIData []InternalAIResult `json:"internalAIData"`
+}
+
+// InternalAIResult is a result found in the Copyleaks internal AI database.
+type InternalAIResult struct {
+	// ID is the result ID.
+	ID string `json:"id"`
+	// Title is the title of the matching entry.
+	Title string `json:"title"`
+	// Introduction is an excerpt of the matching content.
+	Introduction string `json:"introduction"`
+	// MatchedWords is the number of words that match the scanned document.
+	MatchedWords int `json:"matchedWords"`
+	// IdenticalWords is the number of identical words.
+	IdenticalWords int `json:"identicalWords"`
+	// SimilarWords is the number of similar, but not identical, words.
+	SimilarWords int `json:"similarWords"`
+	// ParaphrasedWords is the number of paraphrased words.
+	ParaphrasedWords int `json:"paraphrasedWords"`
+	// TotalWords is the number of words in the matching entry.
+	TotalWords int `json:"totalWords"`
+	// Tags are the tags of the result.
+	Tags []ResultTag `json:"tags"`
 }
 
 // InternetResult is a result found on the internet.
@@ -238,8 +318,7 @@ type ResultMetadata struct {
 	Organization string `json:"organization"`
 	// Filename is the file name.
 	Filename string `json:"filename"`
-	// SubmittedBy is the email of the user who added the document to the Private Cloud
-	// Hub. Only Private Cloud Hub results have it.
+	// SubmittedBy is the email of the user who added the document; only Private Cloud Hub results have it.
 	SubmittedBy string `json:"submittedBy"`
 }
 
@@ -265,9 +344,8 @@ type ResultsScore struct {
 	AggregatedScore float64 `json:"aggregatedScore"`
 }
 
-// UnmarshalJSON decodes a score object, which the server sends. It also accepts a bare
-// number, the shape that the API reference shows for the new-result webhook, as the
-// AggregatedScore.
+// UnmarshalJSON decodes a score object (as the server sends) or a bare number as AggregatedScore (as the API
+// reference shows for the new-result webhook).
 func (s *ResultsScore) UnmarshalJSON(b []byte) error {
 	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] != '{' && t[0] != 'n' {
 		*s = ResultsScore{}
@@ -284,7 +362,6 @@ type Notifications struct {
 }
 
 // Alert is a scan alert.
-//
 // See https://docs.copyleaks.com/reference/data-types/authenticity/scan-alerts.
 type Alert struct {
 	// Category is the alert category; 2 is AI Text Detection.
@@ -299,13 +376,11 @@ type Alert struct {
 	HelpLink string `json:"helpLink"`
 	// Severity is the importance of the alert, from 0 (very low) to 4 (very high).
 	Severity int `json:"severity"`
-	// AdditionalData is extra data about the alert, as a JSON string. For a
-	// suspected-ai-text alert, decode it with AIDetectionResult.
+	// AdditionalData is extra data as a JSON string; decode a suspected-ai-text alert's with AIDetectionResult.
 	AdditionalData string `json:"additionalData"`
 }
 
-// AIDetectionAlert returns the first suspected-ai-text alert of the scan, or nil when
-// the completed webhook has none.
+// AIDetectionAlert returns the first suspected-ai-text alert of the scan, or nil.
 func (w *CompletedWebhook) AIDetectionAlert() *Alert {
 	if w == nil || w.Notifications == nil {
 		return nil
@@ -318,27 +393,18 @@ func (w *CompletedWebhook) AIDetectionAlert() *Alert {
 	return nil
 }
 
-// AIDetectionResult decodes the AI Text Detection result of the scan from its
-// suspected-ai-text alert. It is the same as calling AIDetectionResult on the alert that
-// AIDetectionAlert returns.
-//
-// It returns nil and no error when there is no such alert, or when the alert carries no
-// result; use AIDetectionAlert to tell these cases apart.
+// AIDetectionResult is AIDetectionAlert().AIDetectionResult(). It returns nil and no error when there is no
+// alert or no result; use AIDetectionAlert to tell these apart.
 func (w *CompletedWebhook) AIDetectionResult() (*AITextDetectionResponse, error) {
 	return w.AIDetectionAlert().AIDetectionResult()
 }
 
-// trailingPadding are the characters removed from the end of AdditionalData before it is
-// decoded: NUL and ASCII whitespace.
+// trailingPadding is trimmed from AdditionalData before decoding.
 const trailingPadding = "\x00\t\n\v\f\r "
 
-// AIDetectionResult decodes the AdditionalData of a suspected-ai-text alert into the AI
-// Text Detection result. Trailing NUL characters and ASCII whitespace are ignored.
-//
-// It returns nil and no error when a is nil, when the alert is not a suspected-ai-text
-// alert, when AdditionalData is empty, or when it is valid JSON that is not an object,
-// such as null. It returns an error when AdditionalData is not valid JSON or a field has
-// an unexpected type; AdditionalData keeps the raw string.
+// AIDetectionResult decodes the AdditionalData of a suspected-ai-text alert, ignoring trailing NULs and ASCII
+// whitespace. It returns nil and no error for a nil or other alert, empty data, or JSON that is not an object
+// (such as null), and an error for invalid JSON or a mistyped field; AdditionalData keeps the raw string.
 func (a *Alert) AIDetectionResult() (*AITextDetectionResponse, error) {
 	if a == nil || a.Code != AlertCodeSuspectedAIText {
 		return nil, nil
@@ -347,11 +413,11 @@ func (a *Alert) AIDetectionResult() (*AITextDetectionResponse, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
-	var probe any
-	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf("copyleaks: decode suspected-ai-text additionalData: %w", err)
-	}
-	if _, ok := probe.(map[string]any); !ok {
+	// Only an object holds a result; check the first character rather than decode a large result twice.
+	if t := bytes.TrimLeft(data, " \t\r\n"); len(t) == 0 || t[0] != '{' {
+		if !json.Valid(data) {
+			return nil, fmt.Errorf("copyleaks: decode suspected-ai-text additionalData: %w", invalidJSON(data))
+		}
 		return nil, nil
 	}
 	var res AITextDetectionResponse
@@ -389,6 +455,15 @@ func ParseNewResultWebhook(body []byte) (*NewResultWebhook, error) {
 // ParseExportCompletedWebhook decodes the body of an export-completed webhook.
 func ParseExportCompletedWebhook(body []byte) (*ExportCompletedWebhook, error) {
 	return parseWebhook[ExportCompletedWebhook]("export-completed", body)
+}
+
+// invalidJSON returns the error that encoding/json reports for data, which is not valid JSON.
+func invalidJSON(data []byte) error {
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	return errors.New("invalid JSON")
 }
 
 // parseWebhook decodes a webhook body of the given kind.
