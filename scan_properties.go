@@ -156,7 +156,8 @@ type ScanningExclude struct {
 
 // ScanningInclude keeps only some submissions in the results.
 type ScanningInclude struct {
-	// IDPattern keeps only Shared Data Hub and Private Cloud Hub results whose scan ID matches it.
+	// IDPattern keeps only Shared Data Hub and Private Cloud Hub results whose scan ID matches it; same syntax
+	// as ScanningExclude.IDPattern.
 	IDPattern string `json:"idPattern,omitempty"`
 }
 

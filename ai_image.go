@@ -38,7 +38,8 @@ type AIImageObject struct {
 type AIImageDetectionRequest struct {
 	// Base64 is the image, base64-encoded (required): 512x512 pixels to 27 megapixels, under 32 MB.
 	Base64 string `json:"base64"`
-	// Filename is the image name (required), 5 to 254 characters: .png, .jpg, .webp, .heic, .avif, ...
+	// Filename is the image name (required), 5 to 254 characters, ending with .png, .bmp, .jpg, .jpeg, .webp,
+	// .heic, .heif or .avif.
 	Filename string `json:"filename"`
 	// Model is the detection model, such as AIImageModel1Ultra (required).
 	Model string `json:"model"`
@@ -286,7 +287,7 @@ type AIImageAsyncSubmission struct {
 }
 
 // SubmitAIImageAsync submits the image at a URL to AI Image Detection; the result is posted to
-// req.Webhooks.URL. Scan ID: 3 to 36 characters.
+// req.Webhooks.URL (decode it with ParseAIImageWebhook). Scan ID: 3 to 36 characters.
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/submit.
 func (c *Client) SubmitAIImageAsync(ctx context.Context, token *AuthToken, scanID string, req *AIImageAsyncSubmission) error {
 	if err := validate.ID("scan ID", scanID); err != nil {

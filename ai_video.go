@@ -27,7 +27,8 @@ type AIVideoSubmission struct {
 	Headers [][]string `json:"headers,omitempty"`
 	// Verb is the HTTP method used to fetch URL: "GET" (default), "POST" or "PUT".
 	Verb string `json:"verb,omitempty"`
-	// Filename is the video name (required), up to 254 characters: .mp4, .mov, .mkv, .webm, ...
+	// Filename is the video name (required), up to 254 characters, ending with .mp4, .avi, .mov, .mkv, .webm,
+	// .flv, .wmv, .mpg, .m4v, .3gp or .mxf.
 	Filename string `json:"filename"`
 	// Model is the detection model, such as AIVideoModel1Pro (required).
 	Model string `json:"model"`
@@ -39,7 +40,8 @@ type AIVideoSubmission struct {
 	DeveloperPayload string `json:"developerPayload,omitempty"`
 }
 
-// SubmitAIVideo submits the video at a URL to AI Video Detection; the result is posted to req.Webhooks.URL.
+// SubmitAIVideo submits the video at a URL to AI Video Detection; the result is posted to req.Webhooks.URL
+// (decode it with ParseAIVideoWebhook).
 // Scan ID: 3 to 36 characters. The video must be 2 s to 1 h, up to 512 MiB, at least 360x360 px and 16 fps;
 // Copyleaks checks this after download and reports failures to the webhook.
 // See https://docs.copyleaks.com/reference/actions/ai-video-detector/submit.

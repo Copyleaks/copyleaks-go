@@ -1,8 +1,13 @@
-// Package copyleaks is the official Go client for the Copyleaks API: AI Text, Image and Video Detection,
-// Plagiarism Checker, Image Plagiarism Detector, Grammar Checker, Text Moderation, account and scan management,
-// and parsers for webhooks and exported files. Create one Client, log in, and pass the AuthToken to each call:
+// Package copyleaks is the official Go client for the Copyleaks API.
 //
-//	client, _ := copyleaks.NewClient() // no options, so no error
+// It covers AI Text, Image and Video Detection, Plagiarism Checker, Image Plagiarism Detector, Grammar Checker,
+// Text Moderation, account and scan management, and parsers for webhooks and exported files.
+// Create one Client, log in, and pass the AuthToken to each call:
+//
+//	client, err := copyleaks.NewClient()
+//	if err != nil {
+//		return err
+//	}
 //	token, err := client.Login(ctx, email, apiKey)
 //	if err != nil {
 //		return err

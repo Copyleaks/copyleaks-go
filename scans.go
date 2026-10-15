@@ -165,11 +165,13 @@ type ExportRequest struct {
 	// CrawledVersion exports the crawled version of the submitted content; see ParseExportedCrawledVersion.
 	CrawledVersion *ExportTarget `json:"crawledVersion,omitempty"`
 	// AIDetection exports the AI Text Detection report, with AI Logic when it was on. It requires
-	// ScanProperties.AIGeneratedText.Detect on submit.
+	// ScanProperties.AIGeneratedText.Detect on submit. See ParseExportedAIDetection.
 	AIDetection *ExportTarget `json:"aiDetection,omitempty"`
 	// WritingFeedback exports the Grammar Checker report; it requires ScanProperties.WritingFeedback.Enable.
+	// See ParseExportedWritingFeedback.
 	WritingFeedback *ExportTarget `json:"writingFeedback,omitempty"`
 	// Overview exports the Gen-AI Overview. It requires ScanProperties.Overview.Enable on submit.
+	// See ParseExportedOverview.
 	Overview *ExportTarget `json:"overview,omitempty"`
 }
 
