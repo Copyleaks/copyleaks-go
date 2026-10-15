@@ -1,7 +1,4 @@
-// Command image-plagiarism searches the web for copies of an image with the Image
-// Plagiarism Detector, in sandbox mode.
-//
-// Usage:
+// Command image-plagiarism searches the web for copies of an image, in sandbox mode.
 //
 //	export COPYLEAKS_EMAIL=you@example.com COPYLEAKS_API_KEY=your-api-key
 //	go run ./examples/image-plagiarism path/to/image.jpg

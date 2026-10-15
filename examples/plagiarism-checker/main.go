@@ -1,8 +1,5 @@
-// Command plagiarism-checker submits a text to the Plagiarism Checker, with AI Text
-// Detection, in sandbox mode. The results arrive at your status webhook; see the
-// webhooks example for a server that receives them.
-//
-// Usage:
+// Command plagiarism-checker submits a text to the Plagiarism Checker, with AI Text Detection, in sandbox mode.
+// The results arrive at your status webhook; see the webhooks example for a server that receives them.
 //
 //	export COPYLEAKS_EMAIL=you@example.com COPYLEAKS_API_KEY=your-api-key
 //	export COPYLEAKS_WEBHOOK_URL='https://your-server.example/webhook/{STATUS}'

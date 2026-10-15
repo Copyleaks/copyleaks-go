@@ -24,8 +24,7 @@ type ReleaseNote struct {
 	HTMLDescription string `json:"htmlDescription"`
 }
 
-// ReleaseNotes returns the release notes of the Copyleaks API. It needs no login. Its
-// endpoint is not part of the API reference, so its content may change without notice.
+// ReleaseNotes returns the API release notes. No login needed. The endpoint is undocumented and may change.
 func (c *Client) ReleaseNotes(ctx context.Context) (*ReleaseNotes, error) {
 	var res ReleaseNotes
 	if err := c.do(ctx, apiRequest{method: http.MethodGet, path: "/v3/release-logs.json"}, &res); err != nil {
@@ -42,9 +41,7 @@ type SupportedFileTypes struct {
 	OCR []string `json:"ocr"`
 }
 
-// SupportedFileTypes returns the file types that the Plagiarism Checker can scan. It
-// needs no login.
-//
+// SupportedFileTypes returns the file types that the Plagiarism Checker can scan. No login needed.
 // See https://docs.copyleaks.com/reference/actions/miscellaneous/supported-plagiarism-file-types.
 func (c *Client) SupportedFileTypes(ctx context.Context) (*SupportedFileTypes, error) {
 	var res SupportedFileTypes
@@ -54,9 +51,7 @@ func (c *Client) SupportedFileTypes(ctx context.Context) (*SupportedFileTypes, e
 	return &res, nil
 }
 
-// OCRSupportedLanguages returns the language codes that SubmitOCR accepts in
-// OCRSubmission.LangCode. It needs no login.
-//
+// OCRSupportedLanguages returns the codes accepted in OCRSubmission.LangCode. No login needed.
 // See https://docs.copyleaks.com/reference/actions/miscellaneous/ocr-supported-languages.
 func (c *Client) OCRSupportedLanguages(ctx context.Context) ([]string, error) {
 	var res []string
@@ -66,8 +61,7 @@ func (c *Client) OCRSupportedLanguages(ctx context.Context) ([]string, error) {
 	return res, nil
 }
 
-// AllowedCrossLanguages lists the languages of cross-language Plagiarism Checker scans.
-// See Scanning.CrossLanguages.
+// AllowedCrossLanguages lists the languages of cross-language scans (see Scanning.CrossLanguages).
 type AllowedCrossLanguages struct {
 	// DocumentLanguages are the languages that a scanned document can be in.
 	DocumentLanguages LanguageCodes `json:"documentLanguages"`
@@ -75,13 +69,11 @@ type AllowedCrossLanguages struct {
 	ResultLanguages LanguageCodes `json:"resultLanguages"`
 }
 
-// LanguageCodes maps language names, such as "english", to ISO 639-1 language codes,
-// such as "en".
+// LanguageCodes maps language names, such as "english", to ISO 639-1 codes, such as "en".
 type LanguageCodes map[string]string
 
-// UnmarshalJSON decodes the object of language names and codes that the server sends.
-// It also accepts a list of codes, the shape that the API reference shows, and then
-// maps each code to itself.
+// UnmarshalJSON decodes the name-to-code object that the server sends, or a list of codes (as the API
+// reference shows), mapping each code to itself.
 func (l *LanguageCodes) UnmarshalJSON(b []byte) error {
 	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '[' {
 		var codes []string
@@ -103,8 +95,7 @@ func (l *LanguageCodes) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Codes returns the language codes, sorted and without duplicates. Use them in
-// CrossLanguage.Code.
+// Codes returns the codes, sorted and deduplicated, for use in CrossLanguage.Code.
 func (l LanguageCodes) Codes() []string {
 	codes := make([]string, 0, len(l))
 	seen := make(map[string]bool, len(l))
@@ -118,9 +109,7 @@ func (l LanguageCodes) Codes() []string {
 	return codes
 }
 
-// AllowedCrossLanguages returns the languages of cross-language Plagiarism Checker
-// scans. It needs no login.
-//
+// AllowedCrossLanguages returns the languages of cross-language scans. No login needed.
 // See https://docs.copyleaks.com/reference/actions/miscellaneous/supported-cross-languages.
 func (c *Client) AllowedCrossLanguages(ctx context.Context) (*AllowedCrossLanguages, error) {
 	var res AllowedCrossLanguages
@@ -136,9 +125,7 @@ type SupportedAITextFileTypes struct {
 	FileTypes []string `json:"supportedAiFileTypes"`
 }
 
-// SupportedAITextFileTypes returns the file types that AI Text Detection can scan. It
-// needs no login.
-//
+// SupportedAITextFileTypes returns the file types that AI Text Detection can scan. No login needed.
 // See https://docs.copyleaks.com/reference/actions/miscellaneous/supported-ai-text-detection-file-types.
 func (c *Client) SupportedAITextFileTypes(ctx context.Context) (*SupportedAITextFileTypes, error) {
 	var res SupportedAITextFileTypes

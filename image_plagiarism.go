@@ -9,17 +9,14 @@ import (
 	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
-// imagePlagiarismExtensions are the file extensions that the Image Plagiarism Detector
-// accepts.
+// imagePlagiarismExtensions are the file extensions that the Image Plagiarism Detector accepts.
 var imagePlagiarismExtensions = []string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".ico"}
 
 // ImagePlagiarismRequest is the request of CheckImagePlagiarism.
 type ImagePlagiarismRequest struct {
-	// Image is the image file (required): under 20 MB and at most 75 megapixels, in JPEG,
-	// PNG, GIF, BMP, WebP or ICO format. The server checks the size.
+	// Image is the image file (required), under 20 MB and at most 75 megapixels.
 	Image []byte
-	// Filename is the name of the image, up to 255 characters, ending with .jpg, .jpeg,
-	// .png, .gif, .bmp, .webp or .ico (required).
+	// Filename is the image name (required), up to 255 characters: .jpg, .jpeg, .png, .gif, .bmp, .webp or .ico.
 	Filename string
 	// Sandbox runs a free test check that returns mock results.
 	Sandbox bool
@@ -36,7 +33,6 @@ const (
 )
 
 // ImagePlagiarismResponse is the result of the Image Plagiarism Detector.
-//
 // See https://docs.copyleaks.com/reference/data-types/authenticity/results/image-plagiarism-response.
 type ImagePlagiarismResponse struct {
 	// DeveloperPayload is the DeveloperPayload of the request.
@@ -67,8 +63,7 @@ type ScannedImage struct {
 
 // ImagePlagiarismMatches are the copies of an image found on the web.
 type ImagePlagiarismMatches struct {
-	// Internet are the matching images, full matches first, then partial matches. Each
-	// image URL appears once. No matches and a zero Score mean that no copy was found.
+	// Internet are the matching images, full matches first, each URL once. Empty means no copy was found.
 	Internet []ImagePlagiarismMatch `json:"internet"`
 	// Score counts the matches.
 	Score *ImagePlagiarismScore `json:"score"`
@@ -100,11 +95,8 @@ type ImagePlagiarismScore struct {
 	PartialMatches int `json:"partialMatches"`
 }
 
-// CheckImagePlagiarism searches the web for copies of an image, full or modified, and
-// for the pages that show them. The image is uploaded as multipart/form-data, as the
-// endpoint requires. The scan ID must be 3 to 36 characters.
-//
-// See https://docs.copyleaks.com/reference/actions/image-plagiarism-detector/check.
+// CheckImagePlagiarism searches the web for full or modified copies of an image and the pages that show them.
+// Scan ID: 3 to 36 characters. See https://docs.copyleaks.com/reference/actions/image-plagiarism-detector/check.
 func (c *Client) CheckImagePlagiarism(ctx context.Context, token *AuthToken, scanID string, req *ImagePlagiarismRequest) (*ImagePlagiarismResponse, error) {
 	if err := validate.ID("scan ID", scanID); err != nil {
 		return nil, invalid(err.Error())

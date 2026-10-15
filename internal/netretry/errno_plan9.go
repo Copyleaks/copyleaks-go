@@ -1,5 +1,4 @@
 package netretry
 
-// connErrnos are the system errors of a refused, reset or broken connection. Plan 9
-// reports them as *net.OpError, which Transient also accepts.
+// connErrnos is empty: Plan 9 reports connection errors as *net.OpError, which Transient accepts.
 var connErrnos []error

@@ -1,6 +1,5 @@
-// Package validate holds the client-side checks of IDs, file names and uploads that the
-// SDK runs before sending a request. Its errors only describe the problem; the caller
-// wraps them so that they match copyleaks.ErrInvalidArgument.
+// Package validate holds the client-side checks of IDs, file names and uploads. Its errors only describe the
+// problem; the caller wraps them to match copyleaks.ErrInvalidArgument.
 package validate
 
 import (
@@ -10,30 +9,25 @@ import (
 	"strings"
 )
 
-// Limits that the server enforces on scan and export IDs. Lengths are counted in UTF-16
-// code units, as the server counts them.
+// Scan and export ID length limits, in UTF-16 code units as the server counts them.
 const (
 	minScanIDLength = 3
 	maxScanIDLength = 36
 )
 
 var (
-	// submitScanIDPattern is the character set that the Plagiarism Checker submit
-	// endpoints accept in a scan ID.
+	// submitScanIDPattern is the scan ID character set of the Plagiarism Checker submits.
 	submitScanIDPattern = regexp.MustCompile(`^[a-z0-9!@$&=_()';:.,~-]+$`)
-	// exportIDPattern is the character set that Export accepts in the scan ID and the
-	// export ID.
+	// exportIDPattern is the character set of the scan ID and export ID of Export.
 	exportIDPattern = regexp.MustCompile("^[a-z0-9!@$^&+%=_(){}<>'\";:/.,~`|\\\\-]+$")
-	// googlePattern matches the sequences that the submit and export endpoints reject in
-	// an ID: g, then one or more o or 0, then gle (google, gogle, g00gle, ...).
+	// googlePattern matches what submits and Export reject in an ID: google, gogle, g00gle, ...
 	googlePattern = regexp.MustCompile(`g[o0]+gle`)
 )
 
 // aiImageExtensions are the file extensions that AI Image Detection accepts.
 var aiImageExtensions = []string{".png", ".bmp", ".jpg", ".jpeg", ".webp", ".heic", ".heif", ".avif"}
 
-// ID checks the 3 to 36 character length that every endpoint enforces on scan and
-// export IDs. name names the argument in the error.
+// ID checks the 3 to 36 character length of every scan and export ID; name names it in the error.
 func ID(name, id string) error {
 	if n := UTF16Len(id); n < minScanIDLength || n > maxScanIDLength {
 		return fmt.Errorf("%s must be %d to %d characters, got %d", name, minScanIDLength, maxScanIDLength, n)
@@ -41,21 +35,17 @@ func ID(name, id string) error {
 	return nil
 }
 
-// SubmitScanID applies the stricter scan ID rules of the Plagiarism Checker submit
-// endpoints: the length, the character set [a-z0-9!@$&=_()';:.,~-], and no g[o0]+gle
-// sequence.
+// SubmitScanID applies the stricter scan ID rules of the Plagiarism Checker submits.
 func SubmitScanID(id string) error {
 	return charsetID("scan ID", id, submitScanIDPattern, "[a-z0-9!@$&=_()';:.,~-]")
 }
 
-// ExportID applies the rules of Export to its scan ID and export ID: the length, the
-// character set [a-z0-9!@$^&+%=_(){}<>'";:/.,~`|\-], and no g[o0]+gle sequence.
+// ExportID applies the rules of Export to its scan ID and export ID.
 func ExportID(name, id string) error {
 	return charsetID(name, id, exportIDPattern, "[a-z0-9!@$^&+%=_(){}<>'\";:/.,~`|\\-]")
 }
 
-// charsetID checks the length of an ID, that it only has characters that match
-// pattern, which charset describes, and that it has no g[o0]+gle sequence.
+// charsetID checks the length of an ID, its characters (pattern, described by charset), and googlePattern.
 func charsetID(name, id string, pattern *regexp.Regexp, charset string) error {
 	if err := ID(name, id); err != nil {
 		return err
@@ -93,8 +83,7 @@ func UTF16Len(s string) int {
 	return n
 }
 
-// UploadContent checks that exactly one of the Base64 and Content fields of an upload
-// request is set.
+// UploadContent checks that exactly one of Base64 and Content of an upload request is set.
 func UploadContent(b64 string, content []byte) error {
 	switch {
 	case b64 == "" && len(content) == 0:

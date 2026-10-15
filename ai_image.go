@@ -9,32 +9,26 @@ import (
 	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
-// AIImageModel1Ultra is the AI Image Detection model "ai-image-1-ultra". It produces a
-// mask of the regions detected as AI-generated.
+// AIImageModel1Ultra is the AI Image Detection model "ai-image-1-ultra", which masks AI-generated regions.
 const AIImageModel1Ultra = "ai-image-1-ultra"
 
-// The values of AIImageDetectionRequest.MaskType, the kind of mask that AI Image
-// Detection returns.
+// The values of AIImageDetectionRequest.MaskType.
 const (
-	// AIImageMaskBinary returns a run-length encoded mask of the AI-generated regions in
-	// AIImageDetectionResponse.Result. It is the default.
+	// AIImageMaskBinary returns a run-length encoded mask of the AI-generated regions. It is the default.
 	AIImageMaskBinary = "binary"
-	// AIImageMaskHeatmap also returns a confidence band, from 0 to 4, for each run of the
-	// mask, in AIImageDetectionResult.Labels.
+	// AIImageMaskHeatmap also returns a confidence band per mask run in AIImageDetectionResult.Labels.
 	AIImageMaskHeatmap = "heatmap"
 	// AIImageMaskNone returns no mask: AIImageDetectionResponse.Result is nil.
 	AIImageMaskNone = "none"
 )
 
-// maxAIImageObjects and maxAIImageObjectLength are the limits of the object detection
-// list of AI Image Detection.
+// Limits of the AI Image Detection object detection list.
 const (
 	maxAIImageObjects      = 3
 	maxAIImageObjectLength = 32
 )
 
-// AIImageObject is an object to locate in an image, such as "face". See
-// AIImageDetectionRequest.ObjectDetection.
+// AIImageObject is an object to locate in an image, such as "face"; see AIImageDetectionRequest.ObjectDetection.
 type AIImageObject struct {
 	// Object names the object, 1 to 32 characters.
 	Object string `json:"object"`
@@ -42,35 +36,27 @@ type AIImageObject struct {
 
 // AIImageDetectionRequest is the body of DetectAIImage.
 type AIImageDetectionRequest struct {
-	// Base64 is the image, base64-encoded (required). The image must be at least 512x512
-	// pixels and at most 27 megapixels, under 32 MB, in PNG, JPEG, BMP, WebP, HEIC/HEIF or
-	// AVIF format. The server checks the size.
+	// Base64 is the image, base64-encoded (required): 512x512 pixels to 27 megapixels, under 32 MB.
 	Base64 string `json:"base64"`
-	// Filename is the name of the image, 5 to 254 characters, ending with .png, .jpg,
-	// .jpeg, .bmp, .webp, .heic, .heif or .avif (required).
+	// Filename is the image name (required), 5 to 254 characters: .png, .jpg, .webp, .heic, .avif, ...
 	Filename string `json:"filename"`
 	// Model is the detection model, such as AIImageModel1Ultra (required).
 	Model string `json:"model"`
 	// Sandbox runs a free test check that returns mock results.
 	Sandbox bool `json:"sandbox,omitempty"`
-	// MaskType is the kind of mask to return: AIImageMaskBinary (the server default),
-	// AIImageMaskHeatmap or AIImageMaskNone.
+	// MaskType is AIImageMaskBinary (default), AIImageMaskHeatmap or AIImageMaskNone.
 	MaskType string `json:"maskType,omitempty"`
-	// ObjectDetection lists up to 3 objects, such as "face" or "hand", to locate in the
-	// image: &[]copyleaks.AIImageObject{{Object: "face"}}. Each one found is returned,
-	// with its mask, in AIImageDetectionResponse.DetectedObjects. It does not change the
-	// cost. It is a pointer, so that AIImageDetectionRequest stays comparable.
+	// ObjectDetection lists up to 3 objects to locate, such as "face", at no extra cost; see
+	// AIImageDetectionResponse.DetectedObjects. It is a pointer, so that AIImageDetectionRequest stays comparable.
 	ObjectDetection *[]AIImageObject `json:"objectDetection,omitempty"`
 }
 
 // AIImageDetectionResponse is the result of AI Image Detection.
-//
 // See https://docs.copyleaks.com/reference/data-types/ai-detector/ai-image-detection-response.
 type AIImageDetectionResponse struct {
 	// Model is the detection model that was used.
 	Model string `json:"model"`
-	// Result is the run-length encoded mask of the AI-generated regions, over the image
-	// pixels flattened row by row.
+	// Result is the run-length encoded mask of the AI-generated regions, over the pixels flattened row by row.
 	Result *AIImageDetectionResult `json:"result"`
 	// Summary is the share of pixels detected as human-made and as AI-generated.
 	Summary *AIImageDetectionSummary `json:"summary"`
@@ -78,21 +64,15 @@ type AIImageDetectionResponse struct {
 	IsAIDetected bool `json:"isAiDetected"`
 	// ImageInfo is information about the image.
 	ImageInfo *AIImageInfo `json:"imageInfo"`
-	// ScannedDocument is general information about the check. TotalWords and
-	// TotalExcluded are not used.
+	// ScannedDocument is general information about the check; TotalWords and TotalExcluded are not used.
 	ScannedDocument *ScannedDocument `json:"scannedDocument"`
-	// DetectedObjects are the objects of the request's ObjectDetection list that were
-	// found in the image, each with its mask. Objects that were not found are left out,
-	// so look them up by Object. It is nil when the request had no ObjectDetection list.
-	// It is a pointer, so that AIImageDetectionResponse stays comparable.
+	// DetectedObjects are the requested objects that were found, each with its mask; look them up by Object.
+	// Nil without ObjectDetection. It is a pointer, so that AIImageDetectionResponse stays comparable.
 	DetectedObjects *[]AIImageDetectedObject `json:"detectedObjects"`
-	// DeveloperPayload is the DeveloperPayload of an AIImageAsyncSubmission, when the
-	// webhook carries it.
+	// DeveloperPayload is the DeveloperPayload of an AIImageAsyncSubmission, when the webhook carries it.
 	DeveloperPayload string `json:"developerPayload,omitempty"`
-	// Error tells why a check submitted with SubmitAIImageAsync failed. Check it first:
-	// when it is set, the webhook carries no result, only Error and DeveloperPayload.
-	// DetectAIImage and DetectAIImageUpload return an *APIError instead, and never set
-	// it.
+	// Error tells why a SubmitAIImageAsync check failed; when it is set, only Error and DeveloperPayload are
+	// filled. DetectAIImage and DetectAIImageUpload return an *APIError instead.
 	Error *WebhookError `json:"error,omitempty"`
 }
 
@@ -102,8 +82,7 @@ type AIImageDetectionResult struct {
 	Starts []int `json:"starts"`
 	// Lengths are the lengths of the AI-generated runs, one per start position.
 	Lengths []int `json:"lengths"`
-	// Labels are the confidence bands of the runs, from 0 (lowest) to 4 (highest), one
-	// per start position. They are only returned for AIImageMaskHeatmap.
+	// Labels are the confidence bands of the runs, 0 (lowest) to 4 (highest); only for AIImageMaskHeatmap.
 	Labels []int `json:"labels,omitempty"`
 }
 
@@ -111,13 +90,11 @@ type AIImageDetectionResult struct {
 type AIImageDetectedObject struct {
 	// Object is the name of the object, as in the request.
 	Object string `json:"object"`
-	// Mask is the run-length encoded mask of the object, over the image pixels flattened
-	// row by row.
+	// Mask is the run-length encoded mask of the object, over the pixels flattened row by row.
 	Mask *AIImageDetectionResult `json:"mask"`
 }
 
-// AIImageDetectionSummary is the share of pixels detected as human-made and as
-// AI-generated, from 0 to 1.
+// AIImageDetectionSummary is the share of pixels detected as human-made and as AI-generated, 0 to 1.
 type AIImageDetectionSummary struct {
 	// Human is the share of human-made pixels.
 	Human float64 `json:"human"`
@@ -153,9 +130,7 @@ type AIImageMetadata struct {
 	ContentSummary string `json:"contentSummary"`
 }
 
-// DetectAIImage checks whether an image, or part of it, was generated by AI. The scan ID
-// must be 3 to 36 characters.
-//
+// DetectAIImage checks whether an image, or part of it, was generated by AI. Scan ID: 3 to 36 characters.
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/check.
 func (c *Client) DetectAIImage(ctx context.Context, token *AuthToken, scanID string, req *AIImageDetectionRequest) (*AIImageDetectionResponse, error) {
 	if err := validate.ID("scan ID", scanID); err != nil {
@@ -190,33 +165,24 @@ func (c *Client) DetectAIImage(ctx context.Context, token *AuthToken, scanID str
 	return &res, nil
 }
 
-// AIImageUploadRequest is the request of DetectAIImageUpload. It holds the same options
-// as AIImageDetectionRequest, with the image as it is instead of base64-encoded.
+// AIImageUploadRequest is the request of DetectAIImageUpload: the options of AIImageDetectionRequest, raw image.
 type AIImageUploadRequest struct {
-	// Image is the image file (required). The image must be at least 512x512 pixels and
-	// at most 27 megapixels, under 32 MB, in PNG, JPEG, BMP, WebP, HEIC/HEIF or AVIF
-	// format. The server checks the size.
+	// Image is the image file (required), with the limits of AIImageDetectionRequest.Base64.
 	Image []byte
-	// Filename is the name of the image, 5 to 254 characters, ending with .png, .jpg,
-	// .jpeg, .bmp, .webp, .heic, .heif or .avif (required).
+	// Filename is the image name (required); see AIImageDetectionRequest.Filename.
 	Filename string
 	// Model is the detection model, such as AIImageModel1Ultra (required).
 	Model string
 	// Sandbox runs a free test check that returns mock results.
 	Sandbox bool
-	// MaskType is the kind of mask to return: AIImageMaskBinary (the server default),
-	// AIImageMaskHeatmap or AIImageMaskNone.
+	// MaskType is the kind of mask; see AIImageDetectionRequest.MaskType.
 	MaskType string
-	// ObjectDetection lists up to 3 objects to locate in the image; see
-	// AIImageDetectionRequest.ObjectDetection.
+	// ObjectDetection lists up to 3 objects to locate; see AIImageDetectionRequest.ObjectDetection.
 	ObjectDetection []AIImageObject
 }
 
-// DetectAIImageUpload checks whether an image, or part of it, was generated by AI, like
-// DetectAIImage. It uploads the image as multipart/form-data, the format that the API
-// recommends: the image is sent as it is, without the base64 encoding that makes the
-// request a third larger, and the SDK holds about one copy of it.
-//
+// DetectAIImageUpload is DetectAIImage with a multipart/form-data upload, the format that the API recommends:
+// the request is a third smaller than base64 and the SDK holds about one copy of the image.
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/check.
 func (c *Client) DetectAIImageUpload(ctx context.Context, token *AuthToken, scanID string, req *AIImageUploadRequest) (*AIImageDetectionResponse, error) {
 	if err := validate.ID("scan ID", scanID); err != nil {
@@ -263,8 +229,7 @@ func (c *Client) DetectAIImageUpload(ctx context.Context, token *AuthToken, scan
 	return &res, nil
 }
 
-// validateAIImageOptions checks the filename, the mask type and the object detection
-// list of an AI Image Detection request.
+// validateAIImageOptions checks the filename, mask type and object list of an AI Image Detection request.
 func validateAIImageOptions(filename, maskType string, objects []AIImageObject) error {
 	if n := validate.UTF16Len(filename); n < 5 || n > 254 || !validate.HasAIImageExtension(filename) {
 		return invalid("Filename must be 5 to 254 characters and end with .png, .jpg, .jpeg, .bmp, .webp, .heic, .heif or .avif")
@@ -277,8 +242,7 @@ func validateAIImageOptions(filename, maskType string, objects []AIImageObject) 
 	return validateAIImageObjects(objects)
 }
 
-// validateAIImageObjects checks an object detection list: up to 3 objects, each named
-// with 1 to 32 characters.
+// validateAIImageObjects checks an object detection list: up to 3 objects of 1 to 32 characters.
 func validateAIImageObjects(objects []AIImageObject) error {
 	if len(objects) > maxAIImageObjects {
 		return invalid(fmt.Sprintf("ObjectDetection must list at most %d objects", maxAIImageObjects))
@@ -291,8 +255,7 @@ func validateAIImageObjects(objects []AIImageObject) error {
 	return nil
 }
 
-// ResultWebhook is the webhook that receives the result of an asynchronous check, such
-// as SubmitAIImageAsync and SubmitAIVideo.
+// ResultWebhook receives the result of an asynchronous check (SubmitAIImageAsync, SubmitAIVideo).
 type ResultWebhook struct {
 	// URL is called with a POST request that carries the result (required).
 	URL string `json:"url"`
@@ -304,16 +267,13 @@ type ResultWebhook struct {
 type AIImageAsyncSubmission struct {
 	// URL is the public address of the image to check (required).
 	URL string `json:"url"`
-	// FileName is the name of the image, ending with .png, .jpg, .jpeg, .bmp, .webp,
-	// .heic, .heif or .avif, up to 254 characters (required).
+	// FileName is the image name (required), up to 254 characters; see AIImageDetectionRequest.Filename.
 	FileName string `json:"fileName"`
 	// Model is the detection model, such as AIImageModel1Ultra (required).
 	Model string `json:"model"`
-	// MaskType is the kind of mask in the result: AIImageMaskBinary (the server default)
-	// or AIImageMaskHeatmap.
+	// MaskType is AIImageMaskBinary (default) or AIImageMaskHeatmap.
 	MaskType string `json:"maskType,omitempty"`
-	// ObjectDetection lists up to 3 objects to locate in the image; see
-	// AIImageDetectionRequest.ObjectDetection.
+	// ObjectDetection lists up to 3 objects to locate; see AIImageDetectionRequest.ObjectDetection.
 	ObjectDetection []AIImageObject `json:"objectDetection,omitempty"`
 	// Headers are the headers that Copyleaks sends to fetch URL, as [name, value] pairs.
 	Headers [][]string `json:"headers,omitempty"`
@@ -321,15 +281,12 @@ type AIImageAsyncSubmission struct {
 	Webhooks ResultWebhook `json:"webhooks"`
 	// Sandbox runs a free test check that returns mock results.
 	Sandbox bool `json:"sandbox,omitempty"`
-	// DeveloperPayload is a string of up to 511 characters that Copyleaks sends back with
-	// the result.
+	// DeveloperPayload is sent back with the result; up to 511 characters.
 	DeveloperPayload string `json:"developerPayload,omitempty"`
 }
 
-// SubmitAIImageAsync submits the image at a URL to AI Image Detection. The check runs
-// in the background, and Copyleaks posts the result to req.Webhooks.URL; decode it with
-// ParseAIImageWebhook. The scan ID must be 3 to 36 characters.
-//
+// SubmitAIImageAsync submits the image at a URL to AI Image Detection; the result is posted to
+// req.Webhooks.URL. Scan ID: 3 to 36 characters.
 // See https://docs.copyleaks.com/reference/actions/ai-image-detector/submit.
 func (c *Client) SubmitAIImageAsync(ctx context.Context, token *AuthToken, scanID string, req *AIImageAsyncSubmission) error {
 	if err := validate.ID("scan ID", scanID); err != nil {
@@ -359,10 +316,7 @@ func (c *Client) SubmitAIImageAsync(ctx context.Context, token *AuthToken, scanI
 	}, nil)
 }
 
-// ParseAIImageWebhook decodes the result of SubmitAIImageAsync that Copyleaks posts to
-// the webhook. It has the shape of the DetectAIImage response. When the check failed,
-// the result only has Error and DeveloperPayload, so check Error first.
-//
+// ParseAIImageWebhook decodes the SubmitAIImageAsync result posted to the webhook. Check Error first.
 // See https://docs.copyleaks.com/reference/data-types/ai-detector/ai-image-detection-response.
 func ParseAIImageWebhook(body []byte) (*AIImageDetectionResponse, error) {
 	return parseWebhook[AIImageDetectionResponse]("AI image", body)

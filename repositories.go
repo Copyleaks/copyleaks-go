@@ -6,7 +6,6 @@ import (
 )
 
 // RepositoryRole is the role of a user in a Private Cloud Hub.
-//
 // See https://docs.copyleaks.com/reference/data-types/authenticity/private-cloud-hub/roles.
 type RepositoryRole int
 
@@ -22,15 +21,13 @@ const (
 )
 
 // RepositoryStatus is the state of a Private Cloud Hub.
-//
 // See https://docs.copyleaks.com/reference/data-types/authenticity/private-cloud-hub/status.
 type RepositoryStatus int
 
 const (
 	// RepositoryStatusRunning is a healthy hub.
 	RepositoryStatusRunning RepositoryStatus = 0
-	// RepositoryStatusPendingForDeletion is a hub that is about to be deleted, with all
-	// its documents. It cannot be used.
+	// RepositoryStatusPendingForDeletion is a hub about to be deleted with all its documents; it cannot be used.
 	RepositoryStatusPendingForDeletion RepositoryStatus = 1
 	// RepositoryStatusError is a hub that is not healthy. Contact Copyleaks support.
 	RepositoryStatusError RepositoryStatus = 2
@@ -62,10 +59,8 @@ type RepositoryInfo struct {
 	CreationTime string `json:"creationTime"`
 }
 
-// RepositoryInfo returns information about a Private Cloud Hub: its credits, metadata
-// and status. It needs the Admin or Super Admin role in the hub. Find the repository ID
-// in the Copyleaks Admin Dashboard.
-//
+// RepositoryInfo returns the credits, metadata and status of a Private Cloud Hub. It needs the Admin or Super
+// Admin role; the repository ID is in the Copyleaks Admin Dashboard.
 // See https://docs.copyleaks.com/reference/actions/private-cloud-hub/info.
 func (c *Client) RepositoryInfo(ctx context.Context, token *AuthToken, repositoryID string) (*RepositoryInfo, error) {
 	if repositoryID == "" {

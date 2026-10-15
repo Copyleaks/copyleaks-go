@@ -1,13 +1,8 @@
-// Command webhooks is a server that receives the Copyleaks webhooks of Plagiarism Checker
-// scans and exports, reads the AI Text Detection result of completed scans, and receives
-// the results of asynchronous AI Image and AI Video Detection.
-//
-// Submit scans with the status webhook https://<your-server>/webhook/{STATUS} and the
-// new-result webhook https://<your-server>/webhook/new-result. Copyleaks replaces
-// {STATUS} with completed, error, creditschecked or indexed. In production, protect these
-// endpoints, for example with a secret in SubmitWebhooks.StatusHeaders.
-//
-// Usage:
+// Command webhooks receives the Copyleaks webhooks of Plagiarism Checker scans (with their AI Text Detection
+// result) and exports, and the results of asynchronous AI Image and AI Video Detection. Submit scans with the
+// status webhook https://<your-server>/webhook/{STATUS} and the new-result webhook
+// https://<your-server>/webhook/new-result. In production, protect these endpoints, for example with a secret
+// in SubmitWebhooks.StatusHeaders.
 //
 //	go run ./examples/webhooks
 package main
@@ -40,8 +35,7 @@ func main() {
 // maxBody is the largest webhook body that the server reads.
 const maxBody = 10 << 20
 
-// withBody reads the request body, up to maxBody, and passes it to h. It answers HTTP
-// 413 to a larger body.
+// withBody passes the request body to h, or answers HTTP 413 when it is larger than maxBody.
 func withBody(h func(w http.ResponseWriter, body []byte)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
@@ -137,8 +131,7 @@ func exportCompleted(w http.ResponseWriter, body []byte) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// aiImageResult receives the result of Client.SubmitAIImageAsync, submitted with the
-// webhook https://<your-server>/ai-image/result.
+// aiImageResult receives the Client.SubmitAIImageAsync result at https://<your-server>/ai-image/result.
 func aiImageResult(w http.ResponseWriter, body []byte) {
 	res, err := copyleaks.ParseAIImageWebhook(body)
 	if err != nil {
@@ -153,8 +146,7 @@ func aiImageResult(w http.ResponseWriter, body []byte) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// aiVideoResult receives the result of Client.SubmitAIVideo, submitted with the webhook
-// https://<your-server>/ai-video/result.
+// aiVideoResult receives the Client.SubmitAIVideo result at https://<your-server>/ai-video/result.
 func aiVideoResult(w http.ResponseWriter, body []byte) {
 	res, err := copyleaks.ParseAIVideoWebhook(body)
 	if err != nil {

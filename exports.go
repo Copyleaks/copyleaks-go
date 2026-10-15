@@ -6,20 +6,14 @@ import (
 	"fmt"
 )
 
-// This file models the files that Export uploads to your servers. Decode each upload
-// with the matching Parse function.
-
-// ExportedResult is a result file that Export uploads for each of ExportRequest.Results:
-// the text of a matching source and where it matches the scanned document.
-//
+// ExportedResult is a result file that Export uploads for ExportRequest.Results: a source and its matches.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/results/new-plagiarism-result.
 type ExportedResult struct {
 	// Statistics count the matching words, by kind of match.
 	Statistics *ExportedResultStatistics `json:"statistics"`
 	// Text is the source as plain text, with the matches.
 	Text *ExportedResultText `json:"text"`
-	// HTML is the source as HTML, with the matches, when the scan was submitted with
-	// ScanProperties.IncludeHTML. Otherwise it is empty.
+	// HTML is the source as HTML, with the matches, when the scan set ScanProperties.IncludeHTML.
 	HTML *ExportedResultHTML `json:"html"`
 }
 
@@ -53,13 +47,11 @@ type ExportedResultHTML struct {
 
 // TextPages are the pages of a text.
 type TextPages struct {
-	// StartPosition are the character positions where the pages start. The first one is
-	// the start of the first page.
+	// StartPosition are the character positions where the pages start.
 	StartPosition []int `json:"startPosition"`
 }
 
-// ResultComparison locates the matches between a result source and the scanned
-// document, by kind of match.
+// ResultComparison locates the matches between a result source and the scanned document, by kind of match.
 type ResultComparison struct {
 	// Identical are the identical matches.
 	Identical *ComparisonMatches `json:"identical"`
@@ -69,8 +61,7 @@ type ResultComparison struct {
 	RelatedMeaning *ComparisonMatches `json:"relatedMeaning"`
 }
 
-// ComparisonMatches are matches of one kind, located in the source and in the scanned
-// document. The match at index i is at index i of every list.
+// ComparisonMatches are matches of one kind in the source and the scanned document, as parallel lists.
 type ComparisonMatches struct {
 	// GroupID are the HTML group IDs of the matches, in the HTML comparison only.
 	GroupID []int `json:"groupId,omitempty"`
@@ -96,20 +87,16 @@ type TextRanges struct {
 	Lengths []int `json:"lengths"`
 }
 
-// ExportedCrawledVersion is the crawled version that Export uploads for
-// ExportRequest.CrawledVersion: the submitted document as Copyleaks read it.
-//
+// ExportedCrawledVersion is the document as Copyleaks read it, uploaded for ExportRequest.CrawledVersion.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/results/crawled-version.
 type ExportedCrawledVersion struct {
 	// Metadata counts the words of the document.
 	Metadata *CrawledVersionMetadata `json:"metadata"`
 	// Text is the document as plain text.
 	Text *CrawledVersionText `json:"text"`
-	// HTML is the document as HTML, when the scan was submitted with
-	// ScanProperties.IncludeHTML.
+	// HTML is the document as HTML, when the scan set ScanProperties.IncludeHTML.
 	HTML *CrawledVersionHTML `json:"html"`
-	// ReferencesValidation is the result of the Citation Checker, for a scan submitted
-	// with ScanProperties.References.Validate.
+	// ReferencesValidation is the Citation Checker result, when the scan set ScanProperties.References.Validate.
 	ReferencesValidation *ReferencesValidation `json:"referencesValidation"`
 }
 
@@ -139,8 +126,7 @@ type CrawledVersionHTML struct {
 	Exclude *ExcludedRanges `json:"exclude"`
 }
 
-// ExcludedRanges are the parts of a document that were not scanned, as parallel lists:
-// the part at index i is at index i of every list.
+// ExcludedRanges are the parts of a document that were not scanned, as parallel lists.
 type ExcludedRanges struct {
 	// Starts are the start positions of the parts.
 	Starts []int `json:"starts"`
@@ -154,8 +140,7 @@ type ExcludedRanges struct {
 
 // ReferenceValidation is the validation of one reference by the Citation Checker.
 type ReferenceValidation struct {
-	// Type is "academic" for a reference checked against the Copyleaks academic citation
-	// index, and "nonAcademic" for one checked against the page that it cites.
+	// Type is "academic" (checked against an academic citation index) or "nonAcademic" (against the cited page).
 	Type string `json:"type"`
 	// TextRanges locate the reference in the text.
 	TextRanges *TextRanges `json:"textRanges"`
@@ -163,8 +148,7 @@ type ReferenceValidation struct {
 	HTMLRanges *HTMLRanges `json:"htmlRanges"`
 	// Parsed are the fields that Copyleaks read from the reference.
 	Parsed *ParsedReference `json:"parsed"`
-	// Suggestions are the sources found for the reference. It is empty when none was
-	// found.
+	// Suggestions are the sources found for the reference, if any.
 	Suggestions []ReferenceSuggestion `json:"suggestions"`
 }
 
@@ -178,8 +162,7 @@ type HTMLRanges struct {
 	GroupIDs []int `json:"groupIds"`
 }
 
-// UnmarshalJSON decodes the ranges. It also accepts an empty list, which stands for no
-// ranges.
+// UnmarshalJSON decodes the ranges; it also accepts an empty list, for no ranges.
 func (r *HTMLRanges) UnmarshalJSON(b []byte) error {
 	if t := bytes.TrimSpace(b); len(t) > 0 && t[0] == '[' {
 		var list []json.RawMessage
@@ -227,20 +210,17 @@ type ReferenceSuggestion struct {
 	Signals *ReferenceSignals `json:"signals"`
 }
 
-// ReferenceSignals report which fields of a reference a source corroborates. A nil field
-// was not checked and does not count against the reference.
+// ReferenceSignals report which reference fields a source corroborates; a nil field was not checked.
 type ReferenceSignals struct {
 	// Title reports whether the title matches.
 	Title *bool `json:"title"`
-	// Year reports whether the cited year is the published or the modified year of the
-	// source.
+	// Year reports whether the cited year is the published or the modified year of the source.
 	Year *bool `json:"year"`
 	// Authors reports whether the authors match.
 	Authors *bool `json:"authors"`
 }
 
 // ExportedOverview is the Gen-AI Overview that Export uploads for ExportRequest.Overview.
-//
 // See https://docs.copyleaks.com/reference/data-types/authenticity/results/ai-overview.
 type ExportedOverview struct {
 	// Overview is the overview of the scan, in Markdown.
@@ -249,36 +229,29 @@ type ExportedOverview struct {
 	ModelVersion string `json:"modelVersion"`
 }
 
-// ParseExportedResult decodes a result file that Export uploaded for one of
-// ExportRequest.Results.
+// ParseExportedResult decodes a result file that Export uploaded for ExportRequest.Results.
 func ParseExportedResult(body []byte) (*ExportedResult, error) {
 	return parseExport[ExportedResult]("result", body)
 }
 
-// ParseExportedCrawledVersion decodes the crawled version that Export uploaded for
-// ExportRequest.CrawledVersion.
+// ParseExportedCrawledVersion decodes the crawled version that Export uploaded for ExportRequest.CrawledVersion.
 func ParseExportedCrawledVersion(body []byte) (*ExportedCrawledVersion, error) {
 	return parseExport[ExportedCrawledVersion]("crawled version", body)
 }
 
-// ParseExportedAIDetection decodes the AI Text Detection report that Export uploaded for
-// ExportRequest.AIDetection. It has the shape of the DetectAIText response.
-//
+// ParseExportedAIDetection decodes the AI Text Detection report uploaded for ExportRequest.AIDetection.
 // See https://docs.copyleaks.com/reference/data-types/authenticity/results/ai-detection.
 func ParseExportedAIDetection(body []byte) (*AITextDetectionResponse, error) {
 	return parseExport[AITextDetectionResponse]("AI detection", body)
 }
 
-// ParseExportedWritingFeedback decodes the Grammar Checker report that Export uploaded
-// for ExportRequest.WritingFeedback. It has the shape of the CheckGrammar response.
-//
+// ParseExportedWritingFeedback decodes the Grammar Checker report uploaded for ExportRequest.WritingFeedback.
 // See https://docs.copyleaks.com/reference/data-types/writing/writing-assistant.
 func ParseExportedWritingFeedback(body []byte) (*GrammarCheckResponse, error) {
 	return parseExport[GrammarCheckResponse]("writing feedback", body)
 }
 
-// ParseExportedOverview decodes the Gen-AI Overview that Export uploaded for
-// ExportRequest.Overview.
+// ParseExportedOverview decodes the Gen-AI Overview that Export uploaded for ExportRequest.Overview.
 func ParseExportedOverview(body []byte) (*ExportedOverview, error) {
 	return parseExport[ExportedOverview]("overview", body)
 }

@@ -1,6 +1,5 @@
-// Package upload builds the bodies of the requests that upload a file: JSON with the
-// file as base64 text, and multipart/form-data with the file as it is. Each body is
-// built in one buffer, so that a large upload costs about one copy of the file.
+// Package upload builds upload request bodies (JSON with base64, or multipart/form-data), each in one buffer,
+// so that a large upload costs about one copy of the file.
 package upload
 
 import (
@@ -14,17 +13,11 @@ import (
 	"strings"
 )
 
-// base64Prefix is how the JSON of a request type whose first field is
-// `json:"base64"` starts when that field is empty.
+// base64Prefix starts the JSON of a request whose first field, `json:"base64"`, is empty.
 const base64Prefix = `{"base64":""`
 
-// Base64Body returns the JSON body of an upload request. head is the JSON of the
-// request with its base64 field, which must be its first field, set to "". The body
-// holds b64, or, when raw is not empty, the base64 encoding of raw, as the base64 field.
-//
-// It builds the body in one buffer of the exact size, so that a large upload costs about
-// one copy of its base64 text, instead of the several copies that encoding the whole
-// request with encoding/json makes.
+// Base64Body returns head, the JSON of a request whose first field, base64, is "", with b64 (or the base64 of
+// raw, when set) as that field. One exactly sized buffer avoids the copies that encoding/json would make.
 func Base64Body(head []byte, b64 string, raw []byte) ([]byte, error) {
 	if !bytes.HasPrefix(head, []byte(base64Prefix)) {
 		return nil, errors.New("the request does not start with its base64 field")
@@ -52,8 +45,7 @@ func Base64Body(head []byte, b64 string, raw []byte) ([]byte, error) {
 	return append(body, rest...), nil
 }
 
-// jsonSafe reports whether s can be put in a JSON string as it is: printable ASCII
-// without quotes and backslashes, which is true of base64 text.
+// jsonSafe reports whether s needs no JSON escaping (printable ASCII without " or \), as base64 text.
 func jsonSafe(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if c := s[i]; c < 0x20 || c > 0x7e || c == '"' || c == '\\' {
@@ -63,8 +55,7 @@ func jsonSafe(s string) bool {
 	return true
 }
 
-// quote returns s as a JSON string. Like the JSON of the rest of the request, it does
-// not escape <, > and &.
+// quote returns s as a JSON string without escaping <, > and &, like the rest of the request.
 func quote(s string) []byte {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -79,10 +70,8 @@ type Field struct {
 	Value string
 }
 
-// MultipartBody returns a multipart/form-data body with the file content in the field
-// fileField, followed by fields, and the Content-Type header that goes with it. The body
-// is built in one buffer that is sized for the file, so that the upload costs about one
-// copy of the file.
+// MultipartBody returns a multipart/form-data body, with content in fileField followed by fields, and its
+// Content-Type.
 func MultipartBody(fileField, filename string, content []byte, fields []Field) ([]byte, string, error) {
 	size := len(content) + 1024
 	for _, f := range fields {
@@ -111,8 +100,7 @@ func MultipartBody(fileField, filename string, content []byte, fields []Field) (
 	return buf.Bytes(), w.FormDataContentType(), nil
 }
 
-// quoteEscaper escapes the characters that end or break a quoted Content-Disposition
-// parameter, as mime/multipart does.
+// quoteEscaper escapes what ends or breaks a quoted Content-Disposition parameter, as mime/multipart does.
 var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"", "\r", "", "\n", "")
 
 func escapeQuotes(s string) string {

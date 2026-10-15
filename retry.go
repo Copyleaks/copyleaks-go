@@ -15,54 +15,26 @@ const (
 	defaultRetryMaxDelay  = 30 * time.Second
 )
 
-// RetryPolicy configures the retries that WithRetry turns on.
+// RetryPolicy configures WithRetry. Only calls that are safe to send twice are retried: every GET, Login, the
+// submits that carry your scan ID (SubmitFile, SubmitOCR, SubmitURL, SubmitAIImageAsync, SubmitAIVideo; the
+// server rejects a duplicate ID) and Export, except after HTTP 503 (a failed export keeps its ID, so a retry
+// would get 409). Calls that charge credits per request (DetectAIText, DetectAIImage, CheckGrammar, ModerateText,
+// CheckImagePlagiarism), Start, Delete and ResendWebhook are never retried; their *APIError still has RetryAfter.
 //
-// The SDK only retries calls that are safe to send twice:
-//   - every GET call, such as CreditsBalance, UsagesHistoryCSV and the lookups;
-//   - Login;
-//   - the submits that carry your scan ID: SubmitFile, SubmitOCR, SubmitURL,
-//     SubmitAIImageAsync and SubmitAIVideo. The server rejects a second scan with the
-//     same ID, so a retry never starts a second scan;
-//   - Export, which the server also rejects for an export ID that already exists. It
-//     is not retried after HTTP 503: the server keeps a failed export with that ID,
-//     so a retry would only get HTTP 409 Conflict.
-//
-// It never retries the calls that charge credits for each request, such as DetectAIText,
-// DetectAIImage, CheckGrammar, ModerateText and CheckImagePlagiarism, nor Start,
-// Delete and ResendWebhook. Their errors still report the server's Retry-After delay in
-// APIError.RetryAfter.
-//
-// A call is retried after HTTP 429 (rate limited), HTTP 503 (under maintenance) and
-// connection errors: a timeout, a refused, reset or dropped connection, or an HTTP/2
-// connection that the server shut down. Other errors, such as an invalid TLS
-// certificate or an unknown host, are not retried. Each retry waits for the
-// Retry-After delay of the response when it has one, and otherwise for an exponential
-// backoff with jitter: about BaseDelay, then twice that, and so on, up to MaxDelay.
-//
-// When an attempt of a submit or an export fails with a connection error after the
-// whole request was sent, the server may have processed it. If a later attempt then
-// gets HTTP 409 Conflict, the call counts as a success, as the scan or the export
-// exists.
+// Retries follow HTTP 429, HTTP 503 and connection errors (timeout, refused, reset or dropped connection, HTTP/2
+// shutdown), not TLS or unknown-host errors. Each waits for Retry-After, or else for exponential backoff with
+// jitter from BaseDelay up to MaxDelay. A 409 after an attempt the server may have processed counts as success.
 type RetryPolicy struct {
-	// MaxAttempts is the number of attempts of each call, including the first one.
-	// Values below 2 turn retries off.
+	// MaxAttempts counts the attempts of each call, the first included; below 2 turns retries off.
 	MaxAttempts int
-	// BaseDelay is the delay before the first retry, before jitter. Zero means one
-	// second.
+	// BaseDelay is the delay before the first retry, before jitter (default one second).
 	BaseDelay time.Duration
-	// MaxDelay caps each delay. Zero means 30 seconds. When a response asks for a longer
-	// Retry-After delay, the call is not retried and returns that response's error.
+	// MaxDelay caps each delay (default 30 seconds); a longer Retry-After ends the call with its error.
 	MaxDelay time.Duration
 }
 
-// WithRetry turns on retries of transient failures, as policy describes. Retries are
-// off by default. The context passed to each call bounds the whole call, retries
-// included: a call stops waiting when the context is done, and does not wait for a
-// delay that ends after the context's deadline.
-//
-//	client, err := copyleaks.NewClient(copyleaks.WithRetry(copyleaks.RetryPolicy{MaxAttempts: 4}))
-//
-// A negative field gives an error that matches ErrInvalidArgument.
+// WithRetry turns on retries of transient failures (off by default). The context bounds the whole call, retries
+// included; a delay that ends after its deadline is not waited for. Negative fields give ErrInvalidArgument.
 func WithRetry(policy RetryPolicy) Option {
 	return func(c *Client) error {
 		if policy.MaxAttempts < 0 || policy.BaseDelay < 0 || policy.MaxDelay < 0 {
@@ -82,9 +54,7 @@ func WithRetry(policy RetryPolicy) Option {
 	}
 }
 
-// delay returns how long to wait before the retry that follows attempt (1 for the first
-// attempt), and false when the call must not be retried because retryAfter is longer
-// than MaxDelay.
+// delay returns the wait before the retry after attempt (1-based), or false if retryAfter exceeds MaxDelay.
 func (p RetryPolicy) delay(attempt int, retryAfter time.Duration) (time.Duration, bool) {
 	if retryAfter > 0 {
 		return retryAfter, retryAfter <= p.MaxDelay
@@ -96,14 +66,12 @@ func (p RetryPolicy) delay(attempt int, retryAfter time.Duration) (time.Duration
 	if d > p.MaxDelay {
 		d = p.MaxDelay
 	}
-	// Equal jitter: half of the delay, plus a random part of the other half, so that
-	// clients that failed together do not retry together.
+	// Equal jitter, so that clients that failed together do not retry together.
 	half := d / 2
 	return half + rand.N(d-half+1), true
 }
 
-// parseRetryAfter returns the delay of a Retry-After header, which holds either a number
-// of seconds or an HTTP date. It returns 0 for an empty, invalid or past value.
+// parseRetryAfter parses a Retry-After value (seconds or HTTP date); 0 for an empty, invalid or past value.
 func parseRetryAfter(value string, now time.Time) time.Duration {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -124,10 +92,10 @@ func parseRetryAfter(value string, now time.Time) time.Duration {
 	return 0
 }
 
-// sleep waits for d, or until ctx is done. It is a variable so that tests can replace it.
+// sleep is a variable so that tests can replace it.
 var sleep = sleepContext
 
-// sleepContext waits for d, or until ctx is done, and then returns ctx.Err().
+// sleepContext waits for d, or returns ctx.Err() when ctx is done first.
 func sleepContext(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()

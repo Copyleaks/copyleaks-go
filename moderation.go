@@ -8,8 +8,7 @@ import (
 	"github.com/Copyleaks/copyleaks-go/internal/validate"
 )
 
-// Text Moderation label IDs. See
-// https://docs.copyleaks.com/reference/data-types/moderation/text-moderation-labels.
+// Text Moderation label IDs; see https://docs.copyleaks.com/reference/data-types/moderation/text-moderation-labels.
 const (
 	// TextModerationLabelAdultV1 flags adult content.
 	TextModerationLabelAdultV1 = "adult-v1"
@@ -33,14 +32,13 @@ const (
 	TextModerationLabelCybersecurityV1 = "cybersecurity-v1"
 )
 
-// TextModerationLanguageEnglish is the language code of English, the only language that
-// Text Moderation supports.
+// TextModerationLanguageEnglish is the code of English, the only language that Text Moderation supports.
 const TextModerationLanguageEnglish = "en"
 
 // maxTextModerationLabels is the most labels that one Text Moderation request accepts.
 const maxTextModerationLabels = 16
 
-// The shortest and the longest text, in UTF-16 code units, that Text Moderation accepts.
+// Text Moderation text length limits, in UTF-16 code units.
 const (
 	minTextModerationLength = 2
 	maxTextModerationLength = 25000
@@ -52,16 +50,13 @@ type TextModerationRequest struct {
 	Text string `json:"text"`
 	// Sandbox runs a free test check that returns mock results.
 	Sandbox bool `json:"sandbox,omitempty"`
-	// Language is the language code of the text. Only TextModerationLanguageEnglish is
-	// supported. The server detects the language when it is empty.
+	// Language is the language code: TextModerationLanguageEnglish, or empty to let the server detect it.
 	Language string `json:"language,omitempty"`
-	// Labels are the 1 to 16 categories to check the text for (required). The label value
-	// of each flagged segment in the response is the index of its label in this list.
+	// Labels are 1 to 16 categories to check for (required); a flagged segment's label value indexes this list.
 	Labels []TextModerationLabel `json:"labels"`
 }
 
-// TextModerationLabel is a category to check the text for, such as
-// TextModerationLabelToxicV1.
+// TextModerationLabel is a category to check the text for, such as TextModerationLabelToxicV1.
 type TextModerationLabel struct {
 	// ID is the label ID.
 	ID string `json:"id"`
@@ -110,9 +105,7 @@ type TextModerationLegend struct {
 	ID string `json:"id"`
 }
 
-// ModerateText flags hateful, explicit, toxic or otherwise risky content in a text. The
-// scan ID must be 3 to 36 characters.
-//
+// ModerateText flags hateful, explicit, toxic or otherwise risky content in a text. Scan ID: 3 to 36 characters.
 // See https://docs.copyleaks.com/reference/actions/text-moderation/check.
 func (c *Client) ModerateText(ctx context.Context, token *AuthToken, scanID string, req *TextModerationRequest) (*TextModerationResponse, error) {
 	if err := validate.ID("scan ID", scanID); err != nil {

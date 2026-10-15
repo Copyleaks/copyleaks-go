@@ -11,11 +11,9 @@ import (
 	"strings"
 )
 
-// Transient reports whether err, an error of sending a request or of reading its
-// response, is a connection error that a retry may fix: a timeout, a refused, reset or
-// dropped connection, or an HTTP/2 connection that the server shut down, such as with
-// GOAWAY. TLS certificate errors and unknown hosts are not transient, as a retry fails
-// the same way.
+// Transient reports whether err, from sending a request or reading its response, is a connection error that a
+// retry may fix: a timeout, a refused, reset or dropped connection, or an HTTP/2 GOAWAY. TLS certificate errors
+// and unknown hosts are not, as a retry fails the same way.
 func Transient(err error) bool {
 	var certErr *tls.CertificateVerificationError
 	var authorityErr x509.UnknownAuthorityError
@@ -54,9 +52,8 @@ func Transient(err error) bool {
 	return false
 }
 
-// http2ConnErrors are the messages of the errors of the HTTP/2 transport that report a
-// connection that the server shut down or lost, or a request that it refused before
-// processing it. The transport does not export their types.
+// http2ConnErrors are HTTP/2 transport error messages for a connection the server shut down or lost, or a
+// request it refused before processing. The transport does not export their types.
 var http2ConnErrors = []string{
 	"http2: server sent GOAWAY",
 	"http2: Transport received Server's graceful shutdown GOAWAY",
