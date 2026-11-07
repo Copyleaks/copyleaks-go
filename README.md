@@ -320,6 +320,14 @@ if errors.As(err, &apiErr) {
 	fmt.Println(apiErr.StatusCode, string(apiErr.Body))
 	// The Retry-After delay of the response, when it has one.
 	fmt.Println(apiErr.RetryAfter)
+	// The error object of the body (https://docs.copyleaks.com/using-the-apis/api-errors/); empty fields when absent.
+	body := apiErr.ErrorBody()
+	if body.Type == copyleaks.ErrorTypePayment {
+		fmt.Println(body.ID, body.Code, body.Message)
+	}
+	for _, d := range body.Details {
+		fmt.Println(d.Param, d.Message)
+	}
 }
 ```
 
