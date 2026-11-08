@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -56,6 +57,73 @@ func TestAPIErrorMatchesSentinels(t *testing.T) {
 				t.Errorf("Error() contains the access token: %q", msg)
 			}
 		})
+	}
+}
+
+func TestAPIErrorBody(t *testing.T) {
+	full := APIErrorBody{
+		Type: ErrorTypeInvalidRequest, ID: "missing_parameter", Code: 1,
+		Message: "Bad request. One or several required parameters are missing or incorrect.",
+		URL:     "https://docs.copyleaks.com/using-the-apis/api-errors/#error-reference",
+		Details: []APIErrorDetail{{Param: "labels", Message: "Id Label EXAMPLE-v1 is not supported"}},
+	}
+	tests := []struct {
+		name string
+		body string
+		want APIErrorBody
+	}{
+		{"full envelope", `{"error":{"type":"invalid_request_error","id":"missing_parameter","code":1,` +
+			`"message":"Bad request. One or several required parameters are missing or incorrect.",` +
+			`"url":"https://docs.copyleaks.com/using-the-apis/api-errors/#error-reference",` +
+			`"details":[{"param":"labels","message":"Id Label EXAMPLE-v1 is not supported"}]}}`, full},
+		{"without the optional fields", `{"error":{"type":"payment_error","id":"insufficient_credits","code":7}}`,
+			APIErrorBody{Type: ErrorTypePayment, ID: "insufficient_credits", Code: 7}},
+		{"empty error object", `{"error":{}}`, APIErrorBody{}},
+		{"code as a numeric string", `{"error":{"type":"api_error","code":"42"}}`, APIErrorBody{Type: ErrorTypeAPI, Code: 42}},
+		{"code as a numeric string with whitespace", `{"error":{"code":" 7 "}}`, APIErrorBody{Code: 7}},
+		{"code as a signed numeric string", `{"error":{"code":"-3"}}`, APIErrorBody{Code: -3}},
+		{"code with inner whitespace", `{"error":{"code":"1 2"}}`, APIErrorBody{}},
+		{"code only whitespace", `{"error":{"code":" "}}`, APIErrorBody{}},
+		{"code not a number", `{"error":{"type":"authentication_error","code":"forty-two"}}`, APIErrorBody{Type: ErrorTypeAuthentication}},
+		{"code not an integer", `{"error":{"code":1.5}}`, APIErrorBody{}},
+		{"code an object", `{"error":{"code":{"value":1}}}`, APIErrorBody{}},
+		{"fields of the wrong type", `{"error":{"type":1,"id":true,"message":["m"],"url":null,"code":null}}`, APIErrorBody{}},
+		{"unknown type", `{"error":{"type":"future_error"}}`, APIErrorBody{Type: "future_error"}},
+		{"not JSON", `<html>Bad Gateway</html>`, APIErrorBody{}},
+		{"empty body", ``, APIErrorBody{}},
+		{"JSON without error", `{"message":"the server explains"}`, APIErrorBody{}},
+		{"error is a string", `{"error":"boom"}`, APIErrorBody{}},
+		{"error is null", `{"error":null}`, APIErrorBody{}},
+		{"JSON array", `[{"error":{"type":"api_error"}}]`, APIErrorBody{}},
+		{"details not a list", `{"error":{"id":"x","details":{"param":"a"}}}`, APIErrorBody{ID: "x"}},
+		{"details with bad entries", `{"error":{"details":[null,"text",1,{"param":2,"message":"m"},{},{"param":"p"}]}}`,
+			APIErrorBody{Details: []APIErrorDetail{{Message: "m"}, {}, {Param: "p"}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			apiErr := &APIError{StatusCode: 400, Method: "POST", Endpoint: "/x", Body: []byte(tt.body)}
+			if got := apiErr.ErrorBody(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ErrorBody() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAPIErrorBodyFromResponse(t *testing.T) {
+	body := `{"error":{"type":"payment_error","id":"insufficient_credits","code":"7","message":"Not enough credits."}}`
+	env := newTestEnv(t, http.StatusPaymentRequired, body)
+	_, err := env.client(t).CreditsBalance(context.Background(), testToken())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error %v is not an *APIError", err)
+	}
+	want := APIErrorBody{Type: ErrorTypePayment, ID: "insufficient_credits", Code: 7, Message: "Not enough credits."}
+	if got := apiErr.ErrorBody(); !reflect.DeepEqual(got, want) {
+		t.Errorf("ErrorBody() = %+v, want %+v", got, want)
+	}
+	// The message and the raw body stay as they were.
+	if string(apiErr.Body) != body || err.Error() != "copyleaks: GET /v3/scans/credits: HTTP 402 Payment Required: "+body {
+		t.Errorf("err = %q, Body = %q", err, apiErr.Body)
 	}
 }
 

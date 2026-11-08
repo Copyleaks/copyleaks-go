@@ -1,6 +1,7 @@
 package copyleaks
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -55,6 +56,102 @@ func (e *APIError) Error() string {
 		msg += ": " + truncate(body, maxErrorMessageBody)
 	}
 	return msg
+}
+
+// The error types of APIErrorBody.Type and WebhookError.Type, from
+// https://docs.copyleaks.com/using-the-apis/api-errors/. Type stays a plain string, so a type that the API adds later
+// still comes through.
+const (
+	// ErrorTypeInvalidRequest is the type of an error caused by the request, such as a missing parameter.
+	ErrorTypeInvalidRequest = "invalid_request_error"
+	// ErrorTypeAuthentication is the type of an authentication error.
+	ErrorTypeAuthentication = "authentication_error"
+	// ErrorTypePayment is the type of a payment error.
+	ErrorTypePayment = "payment_error"
+	// ErrorTypeAPI is the type of an error on the Copyleaks side.
+	ErrorTypeAPI = "api_error"
+)
+
+// APIErrorBody is the error object that the API sends in the body of an error response:
+// {"error": {"type": ..., "id": ..., "code": ..., "message": ..., "url": ..., "details": [...]}}.
+// See https://docs.copyleaks.com/using-the-apis/api-errors/. Read it with APIError.ErrorBody.
+// A field that the server did not send is empty. It is the same object as WebhookError, which an error webhook
+// carries.
+type APIErrorBody struct {
+	// Type is the error type: ErrorTypeInvalidRequest, ErrorTypeAuthentication, ErrorTypePayment, ErrorTypeAPI, or
+	// a type that the API adds later.
+	Type string
+	// ID is the machine-readable error ID, such as "missing_parameter".
+	ID string
+	// Code is the numeric error code, or 0 when the server sent none.
+	Code int
+	// Message is a human-readable description of the error.
+	Message string
+	// URL links to the documentation of the error.
+	URL string
+	// Details describe the request parameters that caused the error; nil when the server sent none.
+	Details []APIErrorDetail
+}
+
+// APIErrorDetail describes one request parameter that caused an API error.
+type APIErrorDetail struct {
+	// Param is the name of the parameter.
+	Param string
+	// Message describes the problem with the parameter.
+	Message string
+}
+
+// ErrorBody parses Body as the error object of the API (see APIErrorBody). It never fails: when Body is not a JSON
+// object with an "error" object, every field is empty, and a field of an unexpected JSON type is empty too. Code
+// accepts a JSON integer or a numeric string, with surrounding whitespace; Details keeps the entries that are JSON
+// objects.
+func (e *APIError) ErrorBody() APIErrorBody {
+	var out APIErrorBody
+	var envelope, obj map[string]json.RawMessage
+	if json.Unmarshal(e.Body, &envelope) != nil || json.Unmarshal(envelope["error"], &obj) != nil || obj == nil {
+		return out
+	}
+	out.Type = jsonString(obj["type"])
+	out.ID = jsonString(obj["id"])
+	out.Code = jsonCode(obj["code"])
+	out.Message = jsonString(obj["message"])
+	out.URL = jsonString(obj["url"])
+	var details []json.RawMessage
+	if json.Unmarshal(obj["details"], &details) == nil {
+		for _, d := range details {
+			var detail map[string]json.RawMessage
+			if json.Unmarshal(d, &detail) != nil || detail == nil {
+				continue
+			}
+			out.Details = append(out.Details, APIErrorDetail{Param: jsonString(detail["param"]), Message: jsonString(detail["message"])})
+		}
+	}
+	return out
+}
+
+// jsonString returns the JSON string raw, or "" when raw is missing or not a string.
+func jsonString(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return ""
+	}
+	return s
+}
+
+// jsonCode returns the JSON integer or numeric string raw (surrounding whitespace ignored), or 0 when raw is missing
+// or anything else.
+func jsonCode(raw json.RawMessage) int {
+	var n int
+	if json.Unmarshal(raw, &n) == nil {
+		return n
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+			return n
+		}
+	}
+	return 0
 }
 
 // Is matches ErrUnauthorized (401), ErrRateLimited (429) and ErrUnderMaintenance (503).

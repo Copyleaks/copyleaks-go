@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+This release adds to the API of 1.1.0. It removes, renames and changes no function, type or field.
+
+### Added
+
+- `APIError.ErrorBody` parses the error object of an error response (see
+  https://docs.copyleaks.com/using-the-apis/api-errors/) into an `APIErrorBody`: `Type`, `ID`, `Code`, `Message`,
+  `URL` and `Details` (a list of `APIErrorDetail` with `Param` and `Message`). A field the server did not send is
+  empty; a body that is not the error object gives an empty `APIErrorBody`. `APIError.Error` and `APIError.Body`
+  do not change.
+- The error type constants `ErrorTypeInvalidRequest`, `ErrorTypeAuthentication`, `ErrorTypePayment` and
+  `ErrorTypeAPI`.
+
 ## 1.1.0
 
 This release adds to the API of 1.0.0. It removes, renames and changes no function, type or field.
