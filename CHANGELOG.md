@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 This release adds to the API of 1.1.0. It removes, renames and changes no function, type or field.
 
